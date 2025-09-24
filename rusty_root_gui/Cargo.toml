@@ -1,0 +1,24 @@
+[package]
+name = "rusty_root_gui"
+version = "0.1.0"
+edition = "2021"
+description = "GUI workstation for analyzing CERN ROOT files"
+authors = ["Kyle Lau"]
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "rusty_root_gui"
+path = "src/main.rs"
+
+[dependencies]
+root_io = { path = "../root_io" }
+eframe = { workspace = true }
+egui = { workspace = true }
+egui_extras = { workspace = true }
+egui_plot = { workspace = true }
+rfd = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+env_logger = "0.11"
