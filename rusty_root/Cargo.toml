@@ -1,0 +1,9 @@
+[package]
+name = "rusty_root"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusty_root_io  = { path = "../rusty_root_io" }
+rusty_root_gui = { path = "../rusty_root_gui" }
+iced = "0.13.1"
