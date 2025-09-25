@@ -61,18 +61,19 @@ pub struct TFile {
     // other fields...
 }
 
-impl TFile {
+impl TFileHeader {
+    pub fn new(path: &str) -> Self{
+        match Self::read_header(path) {
+            Ok(header) => header,
+            Err(e) => panic!("Failed to read ROOT header: {}", e),
+        }
+    }
+
     pub fn read_header(path: &str) -> io::Result<Self> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
 
-        // --- magic ---
-        let mut magic = [0u8; 4];
-        reader.read_exact(&mut magic)?; //pointer advance whenever you do read_exact and read_u##
-        if &magic != b"root" {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "not a ROOT file"));
-        }
-        // Minimal header (new & old formats share the start)
+        let _magic = Self::parse_magic(&mut reader)?;
         let f_version = reader.read_u32::<BigEndian>()?; 
         let f_begin = reader.read_u32::<BigEndian>()?;
 
@@ -90,23 +91,11 @@ impl TFile {
         let f_nbytes_free = reader.read_u32::<BigEndian>()?;
         let n_free = reader.read_u32::<BigEndian>()?;
         let f_nbytes_name = reader.read_u32::<BigEndian>()?;
-
-        // fUnits (1 or 8)
-        let mut units_buf = [0u8; 1];
-        reader.read_exact(&mut units_buf)?;
-        let f_units = units_buf[0];
-
-        // fCompress (signed i32 in ROOT)
+        let f_units = Self::parse_f_unit(&mut reader)?;
         let f_compress = reader.read_i32::<BigEndian>()?;
-
-        // fSeekInfo, fNbytesInfo
         let f_seek_info = read_hdr_ptr(&mut reader)?;
         let f_nbytes_info = reader.read_u32::<BigEndian>()?;
-
-        // fUUID (16 bytes)
-        let mut f_uuid = [0u8; 16];
-        reader.read_exact(&mut f_uuid)?;
-
+        let f_uuid = Self::parse_f_uuid(&mut reader)?;
 
         let header = TFileHeader {
             f_version,
@@ -122,29 +111,27 @@ impl TFile {
             f_nbytes_info,
             f_uuid,
         };
-        Ok(Self { header })
+        Ok(header)
+    }
+    fn parse_f_unit(reader: &mut BufReader<File>) -> io::Result<u8> {
+        let mut units_buf = [0u8; 1];
+        reader.read_exact(&mut units_buf)?;
+        Ok(units_buf[0])
+    }
+    fn parse_f_uuid(reader: &mut BufReader<File>) -> io::Result<[u8; 16]> {
+        let mut uuid_buf = [0u8; 16];
+        reader.read_exact(&mut uuid_buf)?;
+        Ok(uuid_buf)
+    }
+    fn parse_magic(reader: &mut BufReader<File>) -> io::Result<[u8; 4]> {
+        let mut magic_buf = [0u8; 4];
+        reader.read_exact(&mut magic_buf)?;
+        if &magic_buf != b"root" {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "not a ROOT file"));
+        }
+        Ok(magic_buf)
     }
 }
-
-// impl TFileHeader {
-//     pub fn new() -> Self {
-//         TFileHeader {
-//             magic: [0; 4],
-//             fVersion: 0,
-//             fBEGIN: 0,
-//             fEND: 0,
-//             fSeekFree: 0,
-//             fNbytesFree: 0,
-//             nfree: 0,
-//             fNbytesName: 0,
-//             fUnits: 0,
-//             fCompress: 0,
-//             fSeekInfo: 0,
-//             fNbytesInfo: 0,
-//             fUUID: [0; 16],
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -152,8 +139,8 @@ mod tests {
     #[test]
     fn test_read_root_header() {
         let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
-        let file = TFile::read_header(path).expect("Failed to read ROOT header");
-        dbg!(&file.header);
+        let header = TFileHeader::read_header(path).expect("Failed to read ROOT header");
+        dbg!(&header);
     }
 
 }
