@@ -17,8 +17,5 @@ Thumbs.db
 *.tmp
 *.temp
 
-# Root files for testing
-*.root
-
 # Logs
 *.log

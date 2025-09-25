@@ -1,10 +1,11 @@
 # Rusty ROOT
 
 A GUI workstation for analyzing and reviewing CERN ROOT files, written in Rust.
+The readme is a milestones, the functions are not implemented yet.
 
-## Features
+## Milestones
 
-- **ROOT File I/O Library** (`root_io` crate):
+- **ROOT File I/O Library** (`rusty_root_io` crate):
   - Read ROOT file headers and validate format
   - Parse ROOT Trees (TTree) with branch data
   - Handle ROOT Histograms (TH1) with statistics
@@ -22,78 +23,14 @@ A GUI workstation for analyzing and reviewing CERN ROOT files, written in Rust.
 
 ## Quick Start
 
-### Prerequisites
-
-- Rust toolchain (1.70 or later)
-- Git
-
-### Building
-
-```bash
-git clone <repository-url>
-cd rusty_root
-cargo build --release
-```
 
 ### Running the GUI
 
 ```bash
-cargo run --bin rusty_root_gui
+cargo run --bin rusty_root
 ```
 
-### Using the Library
-
-```rust
-use root_io::RootReader;
-
-// Open a ROOT file
-let reader = RootReader::open("data.root")?;
-
-// List objects in the file
-let objects = reader.list_objects();
-println!("Objects: {:?}", objects);
-
-// Read a tree
-let tree = reader.read_tree("my_tree")?;
-println!("Tree has {} entries", tree.entries);
-
-// Read a histogram
-let hist = reader.read_histogram("my_histogram")?;
-println!("Histogram: {}", hist.summary());
-```
-
-## Project Structure
-
-```
-rusty_root/
-├── root_io/                 # Core ROOT file I/O library
-│   ├── src/
-│   │   ├── lib.rs          # Library entry point
-│   │   ├── error.rs        # Error types
-│   │   ├── file.rs         # ROOT file handling
-│   │   ├── tree.rs         # TTree implementation
-│   │   ├── histogram.rs    # TH1 histogram implementation
-│   │   └── reader.rs       # High-level reader interface
-│   └── Cargo.toml
-├── rusty_root_gui/         # GUI application
-│   ├── src/
-│   │   ├── main.rs         # Application entry point
-│   │   ├── app.rs          # Main application logic
-│   │   └── ui/             # UI components
-│   │       ├── mod.rs
-│   │       ├── file_panel.rs    # File browser panel
-│   │       ├── tree_panel.rs    # Tree analysis panel
-│   │       ├── histogram_panel.rs # Histogram analysis panel
-│   │       └── plot_panel.rs     # Plotting and visualization
-│   └── Cargo.toml
-└── Cargo.toml              # Workspace configuration
-```
-
-## Features in Detail
-
-### ROOT File I/O Library
-
-The `root_io` crate provides a pure Rust implementation for reading ROOT files:
+The `rusty_root_io` crate provides a pure Rust implementation for reading ROOT files:
 
 - **File Format Support**: Reads ROOT file headers and validates magic signatures
 - **Tree Support**: Parses TTree objects with branch data and statistics
