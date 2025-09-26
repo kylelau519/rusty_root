@@ -37,6 +37,7 @@ pub struct TKeyHeader {
     pub class_name: String,
     pub name: String,
     pub title: String,
+    pub data: Vec<u8>,
 }
 
 enum HeaderPtrWidth {
@@ -69,6 +70,7 @@ impl TKeyHeader {
             class_name: String::new(),
             name: String::new(),
             title: String::new(),
+            data: Vec::new(),
         }
     }
 
@@ -90,13 +92,51 @@ impl TKeyHeader {
         let cycle = reader.read_u16::<BigEndian>()?;
         let seek_key = read_hdr_ptr(reader)?;
         let seek_p_dir = read_hdr_ptr(reader)?;
+        let l_class_name = Self::parse_lname(reader)?;
+        let class_name = Self::parse_string(reader, l_class_name as usize)?;
         let l_name = Self::parse_lname(reader)?;
-        Ok(TKeyHeader::new()) // Placeholder
+        let name = Self::parse_string(reader, l_name as usize)?;
+        let l_title = Self::parse_lname(reader)?;
+        let title = Self::parse_string(reader, l_title as usize)?;
+        let mut keyheader = TKeyHeader {
+            n_bytes,
+            version,
+            obj_len,
+            datime,
+            key_len,
+            cycle,
+            seek_key,
+            seek_p_dir,
+            l_name,
+            class_name,
+            name,
+            title,
+            data: Vec::new(),
+        };
+        keyheader.data = keyheader.parse_payload(reader)?;
+
+        Ok(keyheader)
     }
+    fn parse_payload(&self, reader: &mut BufReader<File>) -> io::Result<Vec<u8>> {
+        let payload_offset = self.seek_key + self.key_len as u64;
+        reader.seek(SeekFrom::Start(payload_offset))?;
+        let payload_buf = self.n_bytes - self.key_len as u32;
+        let mut data_buf = vec![0u8; payload_buf as usize];
+        reader.read_exact(&mut data_buf)?;
+        Ok(data_buf)
+    }
+
     fn parse_lname(reader: &mut BufReader<File>) -> io::Result<u8> {
         let mut lname_buf = [0u8; 1];
         reader.read_exact(&mut lname_buf)?;
         Ok(lname_buf[0])
+    }
+
+    fn parse_string(reader: &mut BufReader<File>, length: usize) -> io::Result<String> {
+        let mut str_buf = vec![0u8; length];
+        reader.read_exact(&mut str_buf)?;
+        let s = String::from_utf8_lossy(&str_buf).to_string();
+        Ok(s)
     }
 }   
 
