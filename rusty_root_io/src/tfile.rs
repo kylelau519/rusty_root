@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufReader, Read, SeekFrom};
 use std::io;
 use byteorder::{BigEndian, ReadBytesExt};
+use crate::tkey::TKeyHeader;
 
 /*
     The first data record 
@@ -61,16 +62,16 @@ pub struct TFileHeader {
 pub struct TFile {
     reader: BufReader<File>,
     pub header: TFileHeader,
+    pub streamer_info: TKeyHeader,
     // other fields...
 }
 impl TFile {
-    
-
     pub fn open(path: &str) -> io::Result<Self> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let header = TFileHeader::read_header(&mut reader)?;
-        Ok(TFile { reader, header })
+        let streamer_info = TKeyHeader::read_tkey_at(&mut reader, header.f_seek_info, header.f_units)?;
+        Ok(TFile { reader, header, streamer_info })
     }
 
     pub fn reader_mut(&mut self) -> &mut BufReader<File> {

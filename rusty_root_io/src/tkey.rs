@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::io;
 use byteorder::{BigEndian, ReadBytesExt};
+use flate2::bufread::ZlibDecoder;
 
 
 /*
@@ -37,7 +38,8 @@ pub struct TKeyHeader {
     pub class_name: String,
     pub name: String,
     pub title: String,
-    pub data: Vec<u8>,
+    pub compressed_data: Vec<u8>,
+    pub decompressed_data: Option<Vec<u8>>,
 }
 
 enum HeaderPtrWidth {
@@ -70,7 +72,8 @@ impl TKeyHeader {
             class_name: String::new(),
             name: String::new(),
             title: String::new(),
-            data: Vec::new(),
+            compressed_data: Vec::new(),
+            decompressed_data: None,
         }
     }
 
@@ -111,12 +114,13 @@ impl TKeyHeader {
             class_name,
             name,
             title,
-            data: Vec::new(),
+            compressed_data: Vec::new(),
+            decompressed_data: None,
         };
-        keyheader.data = keyheader.parse_payload(reader)?;
-
+        keyheader.compressed_data = keyheader.parse_payload(reader)?;
         Ok(keyheader)
     }
+
     fn parse_payload(&self, reader: &mut BufReader<File>) -> io::Result<Vec<u8>> {
         let payload_offset = self.seek_key + self.key_len as u64;
         reader.seek(SeekFrom::Start(payload_offset))?;
@@ -138,7 +142,4 @@ impl TKeyHeader {
         let s = String::from_utf8_lossy(&str_buf).to_string();
         Ok(s)
     }
-}   
-
-
-
+}
