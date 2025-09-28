@@ -1,6 +1,7 @@
 pub mod tkey;
 pub mod tfile;
 pub mod compression;
+pub mod tlist;
 
 #[cfg(test)]
 mod tests {
@@ -18,6 +19,7 @@ mod tests {
         let tkey_offset = tfile.header.f_seek_info;
         let f_units = tfile.header.f_units;
         let key = TKeyHeader::read_tkey_at(tfile.reader_mut(), tkey_offset, f_units).expect("Failed to read TKey at offset");
+        dbg!(&key);
         assert!(key.class_name == "TList");
         assert!(key.name == "StreamerInfo");
     }

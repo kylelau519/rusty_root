@@ -3,6 +3,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::io;
 use byteorder::{BigEndian, ReadBytesExt};
 use flate2::bufread::ZlibDecoder;
+use std::fmt;
 
 
 /*
@@ -24,7 +25,7 @@ Byte Range      | Member Name | Description
 ..->..          | Title     | Title of the object
 ----->          | DATA      | Data bytes associated to the object
  */
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct TKeyHeader {
     pub n_bytes: u32,
     pub version: u16,
@@ -56,7 +57,32 @@ impl HeaderPtrWidth {
         }
     }
 }
-
+impl fmt::Debug for TKeyHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TKeyHeader")
+            .field("n_bytes", &self.n_bytes)
+            .field("version", &self.version)
+            .field("obj_len", &self.obj_len)
+            .field("datime", &self.datime)
+            .field("key_len", &self.key_len)
+            .field("cycle", &self.cycle)
+            .field("seek_key", &self.seek_key)
+            .field("seek_p_dir", &self.seek_p_dir)
+            .field("l_name", &self.l_name)
+            .field("class_name", &self.class_name)
+            .field("name", &self.name)
+            .field("title", &self.title)
+            .field(
+                "compressed_data",
+                &self.compressed_data.get(..10).unwrap_or(&self.compressed_data),
+            )
+            .field(
+                "decompressed_data",
+                &self.decompressed_data.as_ref().map(|v| v.get(..10).unwrap_or(&v[..])),
+            )
+            .finish()
+    }
+}
 impl TKeyHeader {
     pub fn new() -> Self {
         TKeyHeader {
