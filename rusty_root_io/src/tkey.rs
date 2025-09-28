@@ -1,10 +1,11 @@
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::io;
+use std::sync::Arc;
 use byteorder::{BigEndian, ReadBytesExt};
-use flate2::bufread::ZlibDecoder;
 use std::fmt;
 
+use crate::compression::HasCompressedData;
 
 /*
 Byte Range      | Member Name | Description
@@ -40,7 +41,7 @@ pub struct TKeyHeader {
     pub name: String,
     pub title: String,
     pub compressed_data: Vec<u8>,
-    pub decompressed_data: Option<Vec<u8>>,
+    pub decompressed_data: Option<Arc<[u8]>>,
 }
 
 enum HeaderPtrWidth {
@@ -167,5 +168,27 @@ impl TKeyHeader {
         reader.read_exact(&mut str_buf)?;
         let s = String::from_utf8_lossy(&str_buf).to_string();
         Ok(s)
+    }
+}
+
+impl HasCompressedData for TKeyHeader {
+    fn get_compressed_data(&self) -> &[u8] {
+        &self.compressed_data
+    }
+
+    fn get_compressed_len(&self) -> usize {
+        self.compressed_data.len()
+    }
+
+    fn get_uncompressed_len(&self) -> usize {
+        self.obj_len as usize
+    }
+
+    fn decompressed_data(&self) -> Option<Arc<[u8]>> {
+        self.decompressed_data.clone()
+    }
+
+    fn decompressed_data_mut(&mut self) -> &mut Option<Arc<[u8]>> {
+        &mut self.decompressed_data
     }
 }

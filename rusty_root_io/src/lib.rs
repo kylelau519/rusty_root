@@ -5,7 +5,7 @@ pub mod tlist;
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
+    use crate::compression::HasCompressedData;
 
     use super::*;
     use tfile::{TFileHeader, TFile};
@@ -33,5 +33,19 @@ mod tests {
         let data = decompress(&tfile.streamer_info.compressed_data, compression_level);
         assert!(data.is_ok());
         assert!(data.unwrap().len() == tfile.streamer_info.obj_len as usize);
+    }
+
+    use crate::tlist::TList;
+    #[test]
+    fn test_read_root_file() {
+        
+        let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
+        let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
+        tfile.streamer_info.decompress_and_store( tfile.header.f_compress).expect("Failed to decompress streamer info");
+        let tlist = TList::new_from_data(tfile.streamer_info.decompressed_data().unwrap());
+        // dbg!(&tlist.byte_count);
+        assert!(tlist.is_ok());
+        
+
     }
 }

@@ -1,7 +1,7 @@
 use flate2;
 use lz4_flex;
 use zstd;
-use std::io::{self, Read};
+use std::{io::{self, Read}, sync::Arc};
 
 
 pub enum CompressionAlgorithm {
@@ -22,7 +22,7 @@ impl CompressionAlgorithm {
     }
 }
 
-pub fn decompress (data: &[u8] , compression_level: i32) -> io::Result<Vec<u8>> {
+pub fn decompress (data: &[u8] , compression_level: i32) -> io::Result<Arc<[u8]>> {
     let algo = CompressionAlgorithm::from_compression_level(compression_level);
     match algo {
         CompressionAlgorithm::Zlib => {
@@ -32,19 +32,19 @@ pub fn decompress (data: &[u8] , compression_level: i32) -> io::Result<Vec<u8>> 
             let uncompressed_size = u32::from_le_bytes([data[6], data[7], data[8], 0]);
             let mut decompressed_data = Vec::with_capacity(uncompressed_size as usize);
             decoder.read_to_end(&mut decompressed_data)?;
-            Ok(decompressed_data)
+            Ok(Arc::from(decompressed_data))
         },
         CompressionAlgorithm::Lz4 => {
             let decompressed_data = lz4_flex::decompress_size_prepended(data)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-            Ok(decompressed_data)
+            Ok(Arc::from(decompressed_data))
         },
         CompressionAlgorithm::Zstd => {
             let decompressed_data = zstd::decode_all(data)?;
-            Ok(decompressed_data)
+            Ok(Arc::from(decompressed_data))
         },
         CompressionAlgorithm::None => {
-            Ok(data.to_vec())
+            Ok(Arc::from(data.to_vec()))
         },
     }
 }
@@ -53,16 +53,18 @@ pub trait HasCompressedData {
     fn get_compressed_data(&self) -> &[u8];
     fn get_compressed_len(&self) -> usize;
     fn get_uncompressed_len(&self) -> usize;
-    fn get_decompressed_data(&self) -> Option<&Vec<u8>>;
+    fn decompressed_data(&self) -> Option<Arc<[u8]>>;
+    fn decompressed_data_mut(&mut self) -> &mut Option<Arc<[u8]>>;
+    
 
-    fn decompress_into(&self, compression_level: i32) -> io::Result<Vec<u8>> {
+    fn decompress_into(&self, compression_level: i32) -> io::Result<Arc<[u8]>> {
         let compressed_data = self.get_compressed_data();
         decompress(compressed_data, compression_level)
     }
 
-    fn decompress_and_store(&mut self, compression_level: i32) -> io::Result<Vec<u8>> {
+    fn decompress_and_store(&mut self, compression_level: i32) -> io::Result<Arc<[u8]>> {
         let decompressed_data = self.decompress_into(compression_level)?;
-        self.get_decompressed_data().replace(&decompressed_data);
+        self.decompressed_data_mut().replace(decompressed_data.clone());
         Ok(decompressed_data)
     }
 }

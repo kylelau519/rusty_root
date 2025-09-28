@@ -1,4 +1,5 @@
 use std::io;
+use std::sync::Arc;
 
 
 #[derive(Default, Debug)]
@@ -10,7 +11,7 @@ pub struct TList {
     pub n_objects: u32,
     raw_byte_count: u32,
     // Optionally keep the raw payload for debugging
-    pub decompressed_data: Option<Vec<u8>>,
+    pub decompressed_data: Option<Arc<[u8]>>,
     
 }
 
@@ -22,12 +23,12 @@ pub struct TListObject {
     pub key_length: u32,
 }
 pub struct ReaderCursor<'a> {
-    data: &'a [u8],
+    data: &'a Arc<[u8]>,
     position: usize,
 }
 
 impl<'a> ReaderCursor<'a> {
-    pub fn new(data: &'a [u8]) -> Self {
+    pub fn new(data: &'a Arc<[u8]>) -> Self {
         Self { data, position: 0 }
     }
 
@@ -106,30 +107,25 @@ impl TList {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn new_from_data(data: Vec<u8>) -> Result<Self, io::Error> {
+    pub fn new_from_data(data: Arc<[u8]>) -> Result<Self, io::Error> {
         let mut tlist = TList::new();
-        tlist.decompressed_data = Some(data);
+        tlist.decompressed_data = Some(data.clone());
         let mut cursor = ReaderCursor::new(tlist.decompressed_data.as_ref().unwrap());
         let raw_byte_count = cursor.read_u32()?;
         let byte_count = raw_byte_count & 0x3FFF_FFFF;
         let _has_bytecount = (raw_byte_count & 0x4000_0000) != 0;
-        let _new_class = (raw_byte_count & 0x8000_0000) != 0;
+        let _new_class = (raw_byte_count & 0x8000_0000) != 0; //https://root.cern/root/html520/src/TBufferFile.cxx.html?
         tlist.raw_byte_count = raw_byte_count;
         tlist.byte_count = byte_count;
         tlist.version = cursor.read_u16()?;
-        // tlist.f_name_byte = cursor.read_u8()?;
         let _tobject_version = cursor.read_u16()?;
         let _tobject_f_uniqueid = cursor.read_u32()?;
         let _tobject_f_bits = cursor.read_u32()?;
         tlist.f_name_byte = cursor.read_u8()?;
         tlist.f_name = cursor.read_string(tlist.f_name_byte as usize)?;
         tlist.n_objects = cursor.read_u32()?;
-
-
         Ok(tlist)
     }
-
-
 }
 
 
@@ -141,8 +137,7 @@ mod tests {
     #[test]
     fn test_tlist_creation() {
         let data: Vec<u8> = vec![64, 0, 69, 105, 0, 5, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 64, 0, 1, 184, 255, 255, 255, 255, 84, 83, 116, 114, 101, 97, 109, 101, 114, 73];
-        let tlist = TList::new_from_data(data);
+        let tlist = TList::new_from_data(Arc::from(data));
         assert!(tlist.is_ok());
-        // dbg!(&tlist);
     }
 }
