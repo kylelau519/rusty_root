@@ -26,7 +26,7 @@ Byte Range      | Member Name | Description
 ..->..          | Title     | Title of the object
 ----->          | DATA      | Data bytes associated to the object
  */
-// #[derive(Debug)]
+#[derive(Default)]
 pub struct TKeyHeader {
     pub n_bytes: u32,
     pub version: u16,
@@ -104,7 +104,7 @@ impl TKeyHeader {
         }
     }
 
-    pub fn read_tkey_at (reader: &mut BufReader<File>, offset: u64, f_unit: u8) -> io::Result<Self> {
+    pub fn read_tkey_at(reader: &mut BufReader<File>, offset: u64, f_unit: u8) -> io::Result<Self> {
         let header_ptr_width = HeaderPtrWidth::new(f_unit);
         reader.seek(SeekFrom::Start(offset))?;
 
@@ -144,6 +144,12 @@ impl TKeyHeader {
             compressed_data: Vec::new(),
             decompressed_data: None,
         };
+        // keyheader.compressed_data = keyheader.parse_payload(reader)?;
+        Ok(keyheader)
+    }
+
+    pub fn read_tkey_at_save_payload(reader: &mut BufReader<File>, offset: u64, f_unit: u8) -> io::Result<Self> {
+        let mut keyheader = Self::read_tkey_at(reader, offset, f_unit)?;
         keyheader.compressed_data = keyheader.parse_payload(reader)?;
         Ok(keyheader)
     }

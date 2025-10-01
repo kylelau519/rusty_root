@@ -1,8 +1,11 @@
 use std::fs::File;
 use std::io::{BufReader, Read, SeekFrom};
 use std::io;
+use std::sync::Arc;
 use byteorder::{BigEndian, ReadBytesExt};
 use crate::tkey::TKeyHeader;
+use crate::compression::{HasCompressedData};
+use crate::streamerinfo::StreamerInfo;
 
 /*
     The first data record 
@@ -62,7 +65,8 @@ pub struct TFileHeader {
 pub struct TFile {
     reader: BufReader<File>,
     pub header: TFileHeader,
-    pub streamer_info: TKeyHeader,
+    pub streamer_info: StreamerInfo,
+    pub contents: Arc<[u8]>,
     // other fields...
 }
 impl TFile {
@@ -70,12 +74,34 @@ impl TFile {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let header = TFileHeader::read_header(&mut reader)?;
-        let streamer_info = TKeyHeader::read_tkey_at(&mut reader, header.f_seek_info, header.f_units)?;
-        Ok(TFile { reader, header, streamer_info })
+        let streamer_info_header = TKeyHeader::read_tkey_at_save_payload(&mut reader, header.f_seek_info, header.f_units)?;
+        // streamer_info_header.decompress_and_store(header.f_compress)?;
+        let mut streamer_info = StreamerInfo::default();
+        streamer_info.streamer_info_header = streamer_info_header;
+        let contents = Arc::new([]);
+        Ok(TFile { reader, header, streamer_info, contents })
     }
 
     pub fn reader_mut(&mut self) -> &mut BufReader<File> {
         &mut self.reader
+    }
+
+    pub fn read_next_key(&mut self, offset: u64) -> Result<TKeyHeader, io::Error> {
+        let key = TKeyHeader::read_tkey_at(&mut self.reader, offset, self.header.f_units)?;
+        dbg!(&key);
+        Ok(key)
+    }
+
+    pub fn read_all_keys(&mut self) -> Result<Vec<TKeyHeader>, io::Error> {
+        let mut keys = Vec::new();
+        let mut current_offset = self.header.f_begin as u64;
+        while current_offset < self.header.f_seek_info {
+            let key = TKeyHeader::read_tkey_at(&mut self.reader, current_offset, self.header.f_units)?;
+            dbg!(&key);
+            current_offset += key.n_bytes as u64;
+            keys.push(key);
+        }
+        Ok(keys)
     }
 }
 
@@ -146,6 +172,8 @@ impl TFileHeader {
     }
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +184,23 @@ mod tests {
         let mut reader = BufReader::new(file);
         let header = TFileHeader::read_header(&mut reader).expect("Failed to read ROOT header");
         dbg!(&header);
+    }
+    #[test]
+    fn test_read_first_envelope() {
+        let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
+        let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
+        let tkey_offset = tfile.header.f_begin as u64;
+        let f_units = tfile.header.f_units;
+        let key = TKeyHeader::read_tkey_at(tfile.reader_mut(), tkey_offset, f_units).expect("Failed to read TKey at offset");
+        dbg!(&key);
+    }
+
+
+    #[test]
+    fn test_read_all_keys() {
+        let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
+        let keys = tfile.read_all_keys().expect("Failed to read all keys");
+        assert!(keys.len() > 0);
     }
 }
