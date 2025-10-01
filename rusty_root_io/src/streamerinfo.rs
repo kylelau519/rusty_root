@@ -3,10 +3,12 @@ use std::io::{self, Read, Seek};
 use byteorder::{BigEndian, ReadBytesExt};
 use crate::tbuf::TBuf;
 use crate::constant::{K_BYTECOUNTMASK, K_HAS_BYTECOUNT};
+use crate::tlist::TList;
 
 #[derive(Debug, Default)]
 pub struct StreamerInfo {
     pub streamer_info_header: TKeyHeader,
+    pub tlist: TList,
     pub tnamed: TNamed,
     pub tstreamerinfo: TStreamerInfo,
 }
@@ -75,7 +77,6 @@ impl TStreamerInfo {
         let raw_byte_count = tbuf.read_u32()?;
         let byte_count = raw_byte_count & K_BYTECOUNTMASK;
         let tag = tbuf.read_u32()?;
-        println!("Tag {:X}", tag);
         let class_name = tbuf.read_cstring(80)?;
         assert!(class_name == "TStreamerInfo", "Expected TStreamerInfo, got {}", class_name);
         let remain_bytes_after_header = tbuf.read_u32()? | K_BYTECOUNTMASK;
@@ -90,31 +91,26 @@ impl TStreamerInfo {
     }
 }
 
-impl StreamerInfo {
-    pub fn default() -> Self {
-        StreamerInfo {
-            streamer_info_header: TKeyHeader::default(),
-            tnamed: TNamed::default(),
-            tstreamerinfo: TStreamerInfo::default(),
-        }
-    }
 
+
+impl StreamerInfo {
     pub fn new(tkey: TKeyHeader) -> Result<Self, std::io::Error> {
         let data = match &tkey.decompressed_data {
             Some(d) => d,
             None => panic!("No decompressed data available"),
         };
         let mut cursor = TBuf::new(data);
+        let tlist = TList::new_from_streamerinfo(&mut cursor)?;
         let tstreamerinfo = TStreamerInfo::new_from_streamerinfo(&mut cursor)?;
         let tnamed = TNamed::new_from_streamerinfo(&mut cursor)?;
-
         let f_checksum = cursor.read_u32()?;
         let f_class_version = cursor.read_u32()?;
-        // let class_name = Self::parse_string(&mut cursor)?;
-        // assert_eq!(class_name, "TStreamerInfo");
-        // Implement parsing logic here
+        
+
+
         Ok(StreamerInfo {
             streamer_info_header: tkey,
+            tlist: tlist,
             tnamed,
             tstreamerinfo,
         })

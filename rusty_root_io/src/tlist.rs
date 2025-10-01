@@ -1,6 +1,7 @@
 use std::{fmt, io};
 use std::sync::Arc;
 use crate::constant::{K_BYTECOUNTMASK, K_HAS_BYTECOUNT, K_NEW_CLASSBIT, K_NEWCLASSTAG, K_NULLTAG};
+use crate::streamerinfo::TObject;
 use crate::tbuf::TBuf;
 
 #[derive(Default)]
@@ -55,6 +56,29 @@ impl TList {
         tlist.n_objects = cursor.read_u32()?;
         tlist.header_end_pos = cursor.get_position();
         Ok(tlist)
+    }
+
+    pub fn new_from_streamerinfo(tbuf: &mut TBuf) -> Result<Self, io::Error> {
+        let raw_byte_count = tbuf.read_u32()?;
+        let byte_count = raw_byte_count & K_BYTECOUNTMASK;
+        let _has_bytecount = (raw_byte_count & K_HAS_BYTECOUNT) != 0;
+        let _new_class = (raw_byte_count & K_NEW_CLASSBIT) != 0; //https://root.cern/root/html520/src/TBuf.cxx.html?
+        let version = tbuf.read_u16()?;
+        let _tobject = TObject::new_from_streamerinfo(tbuf)?;
+        let f_name_byte = tbuf.read_u8()?;
+        let f_name = tbuf.read_string(f_name_byte as usize)?;
+        let n_objects = tbuf.read_u32()?;
+        let header_end_pos = tbuf.get_position();
+        Ok(TList {
+            byte_count,
+            version,
+            f_name_byte,
+            f_name,
+            n_objects,
+            header_end_pos,
+            raw_byte_count,
+            decompressed_data: None,
+        })
     }
 
     /// Read the first object's envelope (immediately after the TList header) and return

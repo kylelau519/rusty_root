@@ -74,10 +74,12 @@ impl TFile {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let header = TFileHeader::read_header(&mut reader)?;
-        let streamer_info_header = TKeyHeader::read_tkey_at_save_payload(&mut reader, header.f_seek_info, header.f_units)?;
+        let mut streamer_info_header = TKeyHeader::read_tkey_at_save_payload(&mut reader, header.f_seek_info, header.f_units)?;
+        streamer_info_header.decompress_and_store(header.f_compress)?;
         // streamer_info_header.decompress_and_store(header.f_compress)?;
-        let mut streamer_info = StreamerInfo::default();
-        streamer_info.streamer_info_header = streamer_info_header;
+        // let mut streamer_info = StreamerInfo::default();
+        // streamer_info.streamer_info_header = streamer_info_header;
+        let streamer_info = StreamerInfo::new(streamer_info_header)?;
         let contents = Arc::new([]);
         Ok(TFile { reader, header, streamer_info, contents })
     }

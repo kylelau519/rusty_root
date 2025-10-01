@@ -8,7 +8,7 @@ pub mod tbuf;
 
 #[cfg(test)]
 mod tests {
-    use crate::compression::HasCompressedData;
+    use crate::{compression::HasCompressedData, streamerinfo::StreamerInfo};
 
     use super::*;
     use tfile::{TFileHeader, TFile};
@@ -88,4 +88,13 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn test_full_streamer_info_parsing() {
+        let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        
+        let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
+        assert!(tfile.streamer_info.tlist.n_objects > 0);
+        // dbg!(&tfile.streamer_info);
+    }
 }
