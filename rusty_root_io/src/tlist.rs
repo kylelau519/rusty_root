@@ -81,71 +81,6 @@ impl TList {
         })
     }
 
-    /// Read the first object's envelope (immediately after the TList header) and return
-    /// an `ObjectEnvelope` describing class name (if NEW_CLASS), version (handling member-wise 0xFFFF),
-    /// byte_count (0 if no size header), and the offset to the start of the object's body.
-    pub fn extract_first_envelope(&self) -> Result<ObjectEnvelope, io::Error> {
-
-        let data_arc = self.decompressed_data.as_ref().ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no decompressed data stored"))?;
-        let mut c = TBuf::new(data_arc);
-        if !c.seek(self.header_end_pos) {
-            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "header_end_pos out of bounds"));
-        }
-        // Step 1: read first u32; it can be a size header or a tag directly
-        let first = c.read_u32()?;
-        println!("First u32: {:X}", first);
-        let tag: u32;
-        let mut byte_count: u32 = 0;
-        let mut has_size_header = false;
-
-        if (first & K_HAS_BYTECOUNT) != 0 { // size header present
-            has_size_header = true;
-            byte_count = first & K_BYTECOUNTMASK;
-            tag = c.read_u32()?;
-            // tag = c.read_u32()?;  // second word is the tag
-        } else {
-            tag = first;
-        }
-        // Step 2: interpret tag
-        let mut class_name = String::new();
-        if tag == K_NULLTAG {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "first element is null tag"));
-        }
-
-        let mut is_new_class = false;
-        println!("{:X}", tag);
-        if (tag & K_NEW_CLASSBIT) != 0 {
-            if tag == K_NEWCLASSTAG {
-                class_name = c.read_cstring(80)?;
-                is_new_class = true;
-            } else {
-                todo!();
-            }
-        } else {
-            todo!();
-        }
-
-        // Step 3: read version or member-wise marker
-        let marker_or_version = c.read_u16()?;
-        let version: u16 = if marker_or_version == 0xFFFF {
-            // member-wise: u32 mw_size then real u16 version
-            let _mw_size = c.read_u32()?; // you can log/inspect if desired
-            c.read_u16()?
-        } else {
-            marker_or_version
-        };
-
-        // Body starts immediately after the version field we just read
-        let body_offset = c.get_position();
-        dbg!(first, tag, class_name.as_str(), is_new_class, marker_or_version, version, byte_count, has_size_header, body_offset);
-        Ok(ObjectEnvelope {
-            class_name: if is_new_class { class_name } else { class_name },
-            version,
-            byte_count: if has_size_header { byte_count } else { 0 },
-            body_offset,
-        })
-    }
-
     /// Return the byte offset of the first object's BODY (right after ReadVersion),
     /// along with its envelope bytecount and class name. This minimally parses the
     /// object envelope: [u32 bytecount|flags][u32 tag][optional class name],
@@ -217,13 +152,4 @@ mod tests {
         dbg!(raw, _new_class_tag, byte_count, new_class, _has_bytecount);
     }
 
-    #[test]
-    fn test_extract_first_envelope() {
-        // Same synthetic bytes as other tests; this ensures the method runs without panicking.
-        let data: Vec<u8> = vec![64, 0, 69, 105, 0, 5, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 64, 0, 1, 184, 255, 255, 255, 255, 84, 83, 116, 114, 101, 97, 109, 101, 114, 73];
-        let tl = TList::new_from_data(Arc::from(data)).unwrap();
-        let env = tl.extract_first_envelope().unwrap();
-        // byte_count was present in synthetic header
-   
-    }
 }

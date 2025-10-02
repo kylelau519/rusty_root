@@ -51,18 +51,6 @@ mod tests {
         assert!(tlist.is_ok());
         dbg!(&tlist.unwrap());
     }
-    #[test]
-    fn test_read_first_envelope() {
-        let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
-        let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
-        let header = &mut tfile.streamer_info.streamer_info_header;
-        header.decompress_and_store(tfile.header.f_compress).expect("Failed to decompress streamer info");
-        let tlist = TList::new_from_data(header.decompressed_data().unwrap());
-        assert!(tlist.is_ok());
-        let tlist = tlist.unwrap();
-        let envelope = tlist.extract_first_envelope().expect("Failed to extract first envelope");
-        dbg!(&envelope);
-    }
 
     #[test]
     fn test_dump_streamer_info_ascii() {
@@ -95,6 +83,6 @@ mod tests {
         
         let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
         assert!(tfile.streamer_info.tlist.n_objects > 0);
-        // dbg!(&tfile.streamer_info);
+        dbg!(&tfile.streamer_info);
     }
 }

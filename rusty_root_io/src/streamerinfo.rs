@@ -11,6 +11,7 @@ pub struct StreamerInfo {
     pub tlist: TList,
     pub tnamed: TNamed,
     pub tstreamerinfo: TStreamerInfo,
+    pub tobj_array: TObjArray,
 }
 #[derive(Debug, Default)]
 pub struct TNamed {
@@ -91,7 +92,49 @@ impl TStreamerInfo {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct TObjArray {
+    pub raw_byte_count: u32,
+    pub tag: u32,
+    pub class_name: String,
+    pub version: u16,
+    pub tobject: TObject,
+    pub remain_byte_count: u32,
+    pub f_name_byte: u8,
+    pub f_name: String,
+    pub n_objects: u32,
+    pub f_lowerbound: u32,
+}
 
+impl TObjArray {
+    pub fn new_from_streamerinfo(tbuf: &mut TBuf) -> Result<Self, io::Error> {
+        let raw_byte_count = tbuf.read_u32()?;
+        let byte_count = raw_byte_count & K_BYTECOUNTMASK;
+        let tag = tbuf.read_u32()?;
+        let class_name = tbuf.read_cstring(80)?;
+        assert!(class_name == "TObjArray", "Expected TObjArray, got {}", class_name);
+        let remain_byte_count = tbuf.read_u32()?;
+        let version = tbuf.read_u16()?;
+        let tobject = TObject::new_from_streamerinfo(tbuf)?;
+        let f_name_byte = tbuf.read_u8()?;
+        let f_name = tbuf.read_string(f_name_byte as usize)?;
+        let n_objects = tbuf.read_u32()?;
+        let f_lowerbound = tbuf.read_u32()?;
+        Ok(TObjArray {
+            raw_byte_count,
+            tag,
+            class_name,
+            version,
+            tobject,
+            remain_byte_count,
+            f_name_byte,
+            f_name,
+            n_objects,
+            f_lowerbound,
+        })
+    }
+    
+}
 
 impl StreamerInfo {
     pub fn new(tkey: TKeyHeader) -> Result<Self, std::io::Error> {
@@ -105,14 +148,14 @@ impl StreamerInfo {
         let tnamed = TNamed::new_from_streamerinfo(&mut cursor)?;
         let f_checksum = cursor.read_u32()?;
         let f_class_version = cursor.read_u32()?;
+        let tobj_array = TObjArray::new_from_streamerinfo(&mut cursor)?;
         
-
-
         Ok(StreamerInfo {
             streamer_info_header: tkey,
             tlist: tlist,
             tnamed,
             tstreamerinfo,
+            tobj_array,
         })
     }
 

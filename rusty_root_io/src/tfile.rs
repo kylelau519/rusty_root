@@ -174,8 +174,6 @@ impl TFileHeader {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
