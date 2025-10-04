@@ -22,7 +22,10 @@ impl<'a> TBuf<'a> {
     }
 
     pub fn skip(&mut self, n: usize) -> Result<(), io::Error> {
-        let new_pos = self.position.checked_add(n).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "overflow in skip"))?;
+        let new_pos = self
+            .position
+            .checked_add(n)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "overflow in skip"))?;
         if new_pos <= self.data.len() {
             self.position = new_pos;
             Ok(())
@@ -34,7 +37,10 @@ impl<'a> TBuf<'a> {
     pub fn read_u32(&mut self) -> Result<u32, io::Error> {
         if self.position + 4 <= self.data.len() {
             let buffer = &self.data[self.position..self.position + 4];
-            let value = u32::from_be_bytes(buffer.try_into().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Failed to read u32"))?);
+            let value =
+                u32::from_be_bytes(buffer.try_into().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Failed to read u32")
+                })?);
             self.position += 4;
             Ok(value)
         } else {
@@ -45,7 +51,10 @@ impl<'a> TBuf<'a> {
     pub fn read_u16(&mut self) -> Result<u16, io::Error> {
         if self.position + 2 <= self.data.len() {
             let buffer = &self.data[self.position..self.position + 2];
-            let value = u16::from_be_bytes(buffer.try_into().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Failed to read u16"))?);
+            let value =
+                u16::from_be_bytes(buffer.try_into().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Failed to read u16")
+                })?);
             self.position += 2;
             Ok(value)
         } else {
@@ -86,18 +95,34 @@ impl<'a> TBuf<'a> {
             Err(io::Error::from(io::ErrorKind::UnexpectedEof))
         }
     }
-
+    pub fn read_i32(&mut self) -> Result<i32, io::Error> {
+        if self.position + 4 <= self.data.len() {
+            let buffer = &self.data[self.position..self.position + 4];
+            let value =
+                i32::from_be_bytes(buffer.try_into().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Failed to read i32")
+                })?);
+            self.position += 4;
+            Ok(value)
+        } else {
+            Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+        }
+    }
     pub fn read_cstring(&mut self, cap: usize) -> Result<String, io::Error> {
         let start_pos = self.position;
         let end_pos = (start_pos + cap).min(self.data.len());
         for i in start_pos..end_pos {
             if self.data[i] == 0 {
-                let s = String::from_utf8(self.data[start_pos..i].to_vec()).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8"))?;
+                let s = String::from_utf8(self.data[start_pos..i].to_vec())
+                    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8"))?;
                 self.position = i + 1; // move past null terminator
                 return Ok(s);
             }
         }
-        Err(io::Error::new(io::ErrorKind::InvalidData, "No null terminator found within cap"))
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "No null terminator found within cap",
+        ))
     }
 
     pub fn seek(&mut self, position: usize) -> bool {
@@ -112,5 +137,4 @@ impl<'a> TBuf<'a> {
     pub fn get_position(&self) -> usize {
         self.position
     }
-
 }
