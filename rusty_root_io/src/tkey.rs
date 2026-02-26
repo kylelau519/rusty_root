@@ -1,33 +1,50 @@
-use std::fs::File;
-use std::io::{BufReader, Read, Seek, SeekFrom};
-use std::io;
-use std::sync::Arc;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fmt;
+use std::fs::File;
+use std::io;
+use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::sync::Arc;
 
 use crate::compression::HasCompressedData;
 
 /*
-Byte Range      | Member Name | Description
-----------------|-----------|--------------
-1->4            | Nbytes    | Length of compressed object (in bytes)
-5->6            | Version   | TKey version identifier
-7->10           | ObjLen    | Length of uncompressed object
-11->14          | Datime    | Date and time when object was written to file
-15->16          | KeyLen    | Length of the key structure (in bytes)
-17->18          | Cycle     | Cycle of key
-19->22 [19->26] | SeekKey   | Pointer to record itself (consistency check)
-23->26 [27->34] | SeekPdir  | Pointer to directory header
-27->27 [35->35] | lname     | Number of bytes in the class name
-28->.. [36->..] | ClassName | Object Class Name
-..->..          | lname     | Number of bytes in the object name
-..->..          | Name      | lName bytes with the name of the object
-..->..          | lTitle    | Number of bytes in the object title
-..->..          | Title     | Title of the object
------>          | DATA      | Data bytes associated to the object
+----------TKey--------------
+ byte 0->3           Nbytes    = Number of bytes in compressed record (Tkey+data)              TKey::fNbytes
+      4->5           Version   = TKey class version identifier                                 TKey::fVersion
+      6->9           ObjLen    = Number of bytes of uncompressed data                          TKey::fObjLen
+     10->13          Datime    = Date and time when record was written to file                 TKey::fDatime
+                               | (year-1995)<<26|month<<22|day<<17|hour<<12|minute<<6|second
+     14->15          KeyLen    = Number of bytes in key structure (TKey)                       TKey::fKeyLen
+     16->17          Cycle     = Cycle of key                                                  TKey::fCycle
+     18->21 [18->25] SeekKey   = Byte offset of record itself (consistency check)              TKey::fSeekKey
+     22->25 [26->33] SeekPdir  = Byte offset of parent directory record                        TKey::fSeekPdir
+     26->26 [33->33] lname     = Number of bytes in the class name (10)                        TKey::fClassName
+     27->.. [34->..] ClassName = Object Class Name ("TDirectory")                              TKey::fClassName
+      0->0           lname     = Number of bytes in the object name                            TNamed::fName
+      1->..          Name      = lName bytes with the name of the object `<directory-name>`    TNamed::fName
+      0->0           lTitle    = Number of bytes in the object title                           TNamed::fTitle
+      1->..          Title     = lTitle bytes with the title of the object `<directory-title>` TNamed::fTitle
  */
 #[derive(Default)]
 pub struct TKeyHeader {
+    pub base_key: TKey,
+    // pub n_bytes: u32,
+    // pub version: u16,
+    // pub obj_len: u32,
+    // pub datime: u32,
+    // pub key_len: u16,
+    // pub cycle: u16,
+    // pub seek_key: u64,
+    // pub seek_p_dir: u64,
+    // pub l_name: u8,
+    // pub class_name: String,
+    // pub name: String,
+    // pub title: String,
+    pub compressed_data: Vec<u8>,
+    pub decompressed_data: Option<Arc<[u8]>>,
+}
+
+pub struct TKey {
     pub n_bytes: u32,
     pub version: u16,
     pub obj_len: u32,
@@ -39,9 +56,8 @@ pub struct TKeyHeader {
     pub l_name: u8,
     pub class_name: String,
     pub name: String,
+    pub l_title: u8,
     pub title: String,
-    pub compressed_data: Vec<u8>,
-    pub decompressed_data: Option<Arc<[u8]>>,
 }
 
 enum HeaderPtrWidth {
@@ -75,11 +91,17 @@ impl fmt::Debug for TKeyHeader {
             .field("title", &self.title)
             .field(
                 "compressed_data",
-                &self.compressed_data.get(..10).unwrap_or(&self.compressed_data),
+                &self
+                    .compressed_data
+                    .get(..10)
+                    .unwrap_or(&self.compressed_data),
             )
             .field(
                 "decompressed_data",
-                &self.decompressed_data.as_ref().map(|v| v.get(..10).unwrap_or(&v[..])),
+                &self
+                    .decompressed_data
+                    .as_ref()
+                    .map(|v| v.get(..10).unwrap_or(&v[..])),
             )
             .finish()
     }
@@ -148,7 +170,11 @@ impl TKeyHeader {
         Ok(keyheader)
     }
 
-    pub fn read_tkey_at_save_payload(reader: &mut BufReader<File>, offset: u64, f_unit: u8) -> io::Result<Self> {
+    pub fn read_tkey_at_save_payload(
+        reader: &mut BufReader<File>,
+        offset: u64,
+        f_unit: u8,
+    ) -> io::Result<Self> {
         let mut keyheader = Self::read_tkey_at(reader, offset, f_unit)?;
         keyheader.compressed_data = keyheader.parse_payload(reader)?;
         Ok(keyheader)

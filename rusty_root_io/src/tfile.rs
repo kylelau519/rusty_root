@@ -1,34 +1,30 @@
-use std::fs::File;
-use std::io::{BufReader, Read, SeekFrom};
-use std::io;
-use std::sync::Arc;
-use byteorder::{BigEndian, ReadBytesExt};
-use crate::tkey::TKeyHeader;
-use crate::compression::{HasCompressedData};
+use crate::compression::HasCompressedData;
 use crate::streamerinfo::StreamerInfo;
+use crate::tkey::TKeyHeader;
+use byteorder::{BigEndian, ReadBytesExt};
+use std::fs::File;
+use std::io;
+use std::io::{BufReader, Read};
+use std::sync::Arc;
 
 /*
-    The first data record 
-    starts at byte fBEGIN (currently set to kBEGIN).
-    Bytes 1->kBEGIN contain the file description. When fVersion >= 1000000,
-    it is a large file (> 2 GB) and the offsets will be 8 bytes long and
-    fUnits will be set to 8:
-
-    Byte Range      | Record Name   | Description
-    --------------- | ------------- | -----------------------------------------------
-    1->4            | "root"        | Root file identifier
-    5->8            | fVersion      | File format version
-    9->12           | fBEGIN        | Pointer to first data record
-    13->16 [13->20] | fEND          | Pointer to first free word at the EOF -->8
-    17->20 [21->28] | fSeekFree     | Pointer to FREE data record -->8
-    21->24 [29->32] | fNbytesFree   | Number of bytes in FREE data record
-    25->28 [33->36] | nfree         | Number of free data records
-    29->32 [37->40] | fNbytesName   | Number of bytes in TNamed at creation time
-    33->33 [41->41] | fUnits        | Number of bytes for file pointers
-    34->37 [42->45] | fCompress     | Compression level and algorithm
-    38->41 [46->53] | fSeekInfo     | Pointer to TStreamerInfo record --> 8
-    42->45 [54->57] | fNbytesInfo   | Number of bytes in TStreamerInfo record
-    46->63 [58->75] | fUUID         | Universal Unique ID
+    https://root.cern/doc/v638/header.html
+    Byte Range      	Record Name     	Description
+    0...3	            "root"	            Identifies this file as a ROOT file
+    4...7	            Version         	File format version	TFile::fVersion (10000major+100minor+cycle (e.g. 62206 for 6.22.06))
+    8...11	            BEGIN           	Byte offset of first data record (100)	TFile::fBEGIN
+    12...15 [12...19]	END	                Pointer to first free word at the EOF	TFile::fEND (will be == to file size in bytes)
+    16...19 [20...27]	SeekFree        	Byte offset of FreeSegments record	TFile::fSeekFree
+    20...23 [28...31]	NbytesFree      	Number of bytes in FreeSegments record	TFile::fNBytesFree
+    24...27 [32...35]	nfree           	Number of free data records
+    28...31 [36...39]	NbytesName      	Number of bytes in TKey+TNamed for TFile at creation	TDirectory::fNbytesName
+    32...32 [40...40]	Units	            Number of bytes for file pointers (4)	TFile::fUnits
+    33...36 [41...44]	Compress        	Zip compression level (i.e. 0-9)	TFile::fCompress
+    37...40 [45...52]	SeekInfo        	Byte offset of StreamerInfo record	TFile::fSeekInfo
+    41...44 [53...56]	NbytesInfo      	Number of bytes in StreamerInfo record	TFile::fNbytesInfo
+    45...46 [57...58]	UUID vers       	TUUID class version identifier	TUUID::Class_Version()
+    47...62 [59...74]	UUID	            Universally Unique Identifier	TUUID::fTimeLow through fNode[6]
+    63...99 [75...99]		                Extra space to allow END, SeekFree, or SeekInfo to become 64 bit without moving this header
 */
 enum HeaderPtrWidth {
     Off32,
@@ -47,6 +43,7 @@ impl HeaderPtrWidth {
 
 #[derive(Debug, Default)]
 pub struct TFileHeader {
+    _magic: [u8; 4],
     pub f_version: u32,
     pub f_begin: u32,
     pub f_end: u64,
@@ -58,6 +55,7 @@ pub struct TFileHeader {
     pub f_compress: i32,
     pub f_seek_info: u64,
     pub f_nbytes_info: u32,
+    pub f_uuid_vers: u16,
     pub f_uuid: [u8; 16],
 }
 
@@ -74,14 +72,20 @@ impl TFile {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let header = TFileHeader::read_header(&mut reader)?;
-        let mut streamer_info_header = TKeyHeader::read_tkey_at_save_payload(&mut reader, header.f_seek_info, header.f_units)?;
+        let mut streamer_info_header =
+            TKeyHeader::read_tkey_at_save_payload(&mut reader, header.f_seek_info, header.f_units)?;
         streamer_info_header.decompress_and_store(header.f_compress)?;
         // streamer_info_header.decompress_and_store(header.f_compress)?;
         // let mut streamer_info = StreamerInfo::default();
         // streamer_info.streamer_info_header = streamer_info_header;
         let streamer_info = StreamerInfo::new(streamer_info_header)?;
         let contents = Arc::new([]);
-        Ok(TFile { reader, header, streamer_info, contents })
+        Ok(TFile {
+            reader,
+            header,
+            streamer_info,
+            contents,
+        })
     }
 
     pub fn reader_mut(&mut self) -> &mut BufReader<File> {
@@ -98,7 +102,8 @@ impl TFile {
         let mut keys = Vec::new();
         let mut current_offset = self.header.f_begin as u64;
         while current_offset < self.header.f_seek_info {
-            let key = TKeyHeader::read_tkey_at(&mut self.reader, current_offset, self.header.f_units)?;
+            let key =
+                TKeyHeader::read_tkey_at(&mut self.reader, current_offset, self.header.f_units)?;
             dbg!(&key);
             current_offset += key.n_bytes as u64;
             keys.push(key);
@@ -107,15 +112,14 @@ impl TFile {
     }
 }
 
-
 impl TFileHeader {
-    pub fn new() -> Self{
+    pub fn new() -> Self {
         Self::default()
     }
 
     pub fn read_header(reader: &mut BufReader<File>) -> io::Result<Self> {
         let _magic = Self::parse_magic(reader)?;
-        let f_version = reader.read_u32::<BigEndian>()?; 
+        let f_version = reader.read_u32::<BigEndian>()?;
         let f_begin = reader.read_u32::<BigEndian>()?;
 
         let header_ptr_width = HeaderPtrWidth::new(f_version);
@@ -136,9 +140,11 @@ impl TFileHeader {
         let f_compress = reader.read_i32::<BigEndian>()?;
         let f_seek_info = read_hdr_ptr(reader)?;
         let f_nbytes_info = reader.read_u32::<BigEndian>()?;
+        let f_uuid_vers = reader.read_u16::<BigEndian>()?;
         let f_uuid = Self::parse_f_uuid(reader)?;
 
         let header = TFileHeader {
+            _magic,
             f_version,
             f_begin,
             f_end,
@@ -150,6 +156,7 @@ impl TFileHeader {
             f_compress,
             f_seek_info,
             f_nbytes_info,
+            f_uuid_vers,
             f_uuid,
         };
         Ok(header)
@@ -168,7 +175,10 @@ impl TFileHeader {
         let mut magic_buf = [0u8; 4];
         reader.read_exact(&mut magic_buf)?;
         if &magic_buf != b"root" {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "not a ROOT file"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "not a ROOT file",
+            ));
         }
         Ok(magic_buf)
     }
@@ -182,7 +192,10 @@ mod tests {
         let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
         let file = File::open(path).expect("Failed to open ROOT file");
         let mut reader = BufReader::new(file);
-        let header = TFileHeader::read_header(&mut reader).expect("Failed to read ROOT header");
+        let header = match TFileHeader::read_header(&mut reader) {
+            Ok(h) => h,
+            Err(e) => panic!("Failed to read ROOT header: {:?}", e),
+        };
         dbg!(&header);
     }
     #[test]
@@ -191,14 +204,15 @@ mod tests {
         let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
         let tkey_offset = tfile.header.f_begin as u64;
         let f_units = tfile.header.f_units;
-        let key = TKeyHeader::read_tkey_at(tfile.reader_mut(), tkey_offset, f_units).expect("Failed to read TKey at offset");
+        let key = TKeyHeader::read_tkey_at(tfile.reader_mut(), tkey_offset, f_units)
+            .expect("Failed to read TKey at offset");
         dbg!(&key);
     }
 
-
     #[test]
     fn test_read_all_keys() {
-        let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
         let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
         let keys = tfile.read_all_keys().expect("Failed to read all keys");
         assert!(keys.len() > 0);
