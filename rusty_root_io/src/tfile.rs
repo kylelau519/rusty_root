@@ -180,10 +180,11 @@ mod tests {
     fn test_read_first_data_record_key() {
         let path =
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
-        let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
-        let tkey_offset = tfile.header.f_begin as u64;
-        let f_units = tfile.header.f_units;
-        let key = TKey::read_tkey_at(tfile.reader_mut(), tkey_offset, f_units)
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+        let tkey_offset = 100u64;
+        let f_units = 4u8;
+        let key = TKey::read_tkey_at(&mut reader, tkey_offset, f_units)
             .expect("Failed to read TKey at offset");
         assert_eq!(key.name, "user.holau.700590.Sh_2212_llvvjj_ss.e8433_s3681_r13167_r13146_p6697.46550259._000001.output.root");
         dbg!(&key);
@@ -193,14 +194,14 @@ mod tests {
     fn test_read_first_data_record_data() {
         let path =
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
-        let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
-        let begin = tfile.header.f_begin as u64;
-        let f_units = tfile.header.f_units;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+        let begin = 100u64;
+        let f_units = 4u8;
         dbg!(begin, f_units);
-        let reader = tfile.reader_mut();
-        let first_data_key = TKey::read_tkey_at(reader, begin as u64, f_units)
-            .expect("Failed to read TKey at offset");
-        let first_data_data = FirstRecordData::read_header_dict_data(reader)
+        let first_data_key =
+            TKey::read_tkey_at(&mut reader, begin, f_units).expect("Failed to read TKey at offset");
+        let first_data_data = FirstRecordData::read_header_dict_data(&mut reader)
             .expect("Failed to read header dict data at offset");
         assert_eq!(decode_datime(first_data_key.datime), "2025-09-27 06:16:14");
         assert_eq!(
@@ -209,5 +210,13 @@ mod tests {
         );
         dbg!(&first_data_key);
         dbg!(&first_data_data);
+    }
+
+    #[test]
+    fn test_tfile_open() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let tfile = TFile::open(path).expect("Failed to open TFile");
+        dbg!(&tfile);
     }
 }
