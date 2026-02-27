@@ -187,6 +187,7 @@ impl TFileHeader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tdictionary::TFileHeaderDictData;
     #[test]
     fn test_read_root_header() {
         let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
@@ -199,8 +200,9 @@ mod tests {
         dbg!(&header);
     }
     #[test]
-    fn test_read_first_envelope() {
-        let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
+    fn test_read_first_data_record_key() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
         let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
         let tkey_offset = tfile.header.f_begin as u64;
         let f_units = tfile.header.f_units;
@@ -210,11 +212,35 @@ mod tests {
     }
 
     #[test]
-    fn test_read_all_keys() {
+    fn test_read_first_data_record_data() {
         let path =
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
         let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
-        let keys = tfile.read_all_keys().expect("Failed to read all keys");
-        assert!(keys.len() > 0);
+        let begin = tfile.header.f_begin as u64;
+        let f_units = tfile.header.f_units;
+        let reader = tfile.reader_mut();
+        let first_data_key = TKeyHeader::read_tkey_at(reader, begin as u64, f_units)
+            .expect("Failed to read TKey at offset");
+        let first_data_data = TFileHeaderDictData::read_header_dict_data(reader)
+            .expect("Failed to read header dict data at offset");
+        assert_eq!(decode_datime(first_data_key.datime), "2025-09-27 06:16:14");
+        assert_eq!(
+            decode_datime(first_data_data.datime_m),
+            "2025-09-27 06:16:17"
+        );
+        dbg!(&first_data_key);
+        dbg!(&first_data_data);
+    }
+    fn decode_datime(datime: u32) -> String {
+        let year = ((datime >> 26) & 0x3F) + 1995;
+        let month = (datime >> 22) & 0x0F;
+        let day = (datime >> 17) & 0x1F;
+        let hour = (datime >> 12) & 0x1F;
+        let minute = (datime >> 6) & 0x3F;
+        let second = datime & 0x3F;
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            year, month, day, hour, minute, second
+        )
     }
 }

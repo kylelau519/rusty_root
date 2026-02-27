@@ -4,6 +4,7 @@ use crate::tkey::TKeyHeader;
 use crate::tlist::TList;
 use std::io;
 
+// https://root.cern/doc/v638/streamerinfo.html
 #[derive(Debug)]
 pub enum ClassInfoTag {
     NewClass,
