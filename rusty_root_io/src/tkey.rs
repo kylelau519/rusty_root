@@ -7,6 +7,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::compression::HasCompressedData;
+use crate::utils::ReaderDynWidth;
 
 /*
  * https://root.cern/doc/v638/tdirectory.html
@@ -65,23 +66,17 @@ impl TKey {
         }
     }
     pub fn read_tkey_at(reader: &mut BufReader<File>, offset: u64, f_unit: u8) -> io::Result<Self> {
-        let header_ptr_width = HeaderPtrWidth::new(f_unit);
+        let header_ptr_width = ReaderDynWidth::from_unit(f_unit);
         reader.seek(SeekFrom::Start(offset))?;
 
-        let read_hdr_ptr = |r: &mut BufReader<File>| -> io::Result<u64> {
-            match header_ptr_width {
-                HeaderPtrWidth::Off64 => r.read_u64::<BigEndian>(),
-                HeaderPtrWidth::Off32 => Ok(r.read_u32::<BigEndian>()? as u64),
-            }
-        };
         let n_bytes = reader.read_u32::<BigEndian>()?;
         let version = reader.read_u16::<BigEndian>()?;
         let obj_len = reader.read_u32::<BigEndian>()?;
         let datime = reader.read_u32::<BigEndian>()?;
         let key_len = reader.read_u16::<BigEndian>()?;
         let cycle = reader.read_u16::<BigEndian>()?;
-        let seek_key = read_hdr_ptr(reader)?;
-        let seek_p_dir = read_hdr_ptr(reader)?;
+        let seek_key = header_ptr_width.read_ptr(reader)?;
+        let seek_p_dir = header_ptr_width.read_ptr(reader)?;
         let l_class_name = Self::parse_lname(reader)?;
         let class_name = Self::parse_string(reader, l_class_name as usize)?;
         let l_name = Self::parse_lname(reader)?;
@@ -121,16 +116,7 @@ impl TKey {
     }
 
     pub fn decode_datime(&self) -> String {
-        let year = (self.datime >> 26) + 1995;
-        let month = (self.datime >> 22) & 0xF;
-        let day = (self.datime >> 17) & 0x1F;
-        let hour = (self.datime >> 12) & 0x1F;
-        let minute = (self.datime >> 6) & 0x3F;
-        let second = self.datime & 0x3F;
-        format!(
-            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-            year, month, day, hour, minute, second
-        )
+        crate::utils::decode_datime(self.datime)
     }
 }
 impl fmt::Debug for TKey {
@@ -159,21 +145,7 @@ pub struct TKeyHeader {
     pub compressed_data: Vec<u8>,
     pub decompressed_data: Option<Arc<[u8]>>,
 }
-/* To dynamically determine the data unit */
-enum HeaderPtrWidth {
-    Off32,
-    Off64,
-}
 
-impl HeaderPtrWidth {
-    fn new(f_unit: u8) -> Self {
-        match f_unit {
-            8 => HeaderPtrWidth::Off64,
-            4 => HeaderPtrWidth::Off32,
-            _ => panic!("Unexpected fUnits value: {}", f_unit),
-        }
-    }
-}
 impl fmt::Debug for TKeyHeader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TKeyHeader")

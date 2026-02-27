@@ -1,4 +1,5 @@
 use crate::tkey::TKey;
+use crate::utils::ReaderDynWidth;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fs::File;
 use std::io;
@@ -68,16 +69,10 @@ impl FirstRecordData {
         let n_bytes_keys = reader.read_u32::<BigEndian>()?;
         let n_bytes_name = reader.read_u32::<BigEndian>()?;
 
-        let reader_ptr_width = ReaderWidth::new(version);
-        let read_hdr_ptr = |r: &mut BufReader<File>| -> io::Result<u64> {
-            match reader_ptr_width {
-                ReaderWidth::Off64 => r.read_u64::<BigEndian>(),
-                ReaderWidth::Off32 => Ok(r.read_u32::<BigEndian>()? as u64),
-            }
-        };
-        let seek_dir = read_hdr_ptr(reader)?;
-        let seek_parent = read_hdr_ptr(reader)?;
-        let seek_keys = read_hdr_ptr(reader)?;
+        let reader_dyn_width = ReaderDynWidth::from_tkey_version(version);
+        let seek_dir = reader_dyn_width.read_ptr(reader)?;
+        let seek_parent = reader_dyn_width.read_ptr(reader)?;
+        let seek_keys = reader_dyn_width.read_ptr(reader)?;
 
         Ok(Self {
             lname,
@@ -137,18 +132,5 @@ impl FirstRecordData {
         reader.read_exact(&mut str_buf)?;
         let s = String::from_utf8_lossy(&str_buf).to_string();
         Ok(s)
-    }
-}
-
-enum ReaderWidth {
-    Off32,
-    Off64,
-}
-impl ReaderWidth {
-    fn new(version: u16) -> Self {
-        match version {
-            0..=999 => ReaderWidth::Off32,
-            _ => ReaderWidth::Off64,
-        }
     }
 }

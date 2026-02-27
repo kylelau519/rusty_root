@@ -1,8 +1,4 @@
 use crate::tkey::TKey;
-use byteorder::{BigEndian, ReadBytesExt};
-use std::fs::File;
-use std::io;
-use std::io::{BufReader, Read, Seek, SeekFrom};
 
 /*
 * ----------TKey--------------

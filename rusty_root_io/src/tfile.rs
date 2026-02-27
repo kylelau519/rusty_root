@@ -1,5 +1,6 @@
 use crate::first_record::FirstRecordDict;
 use crate::tkey::TKey;
+use crate::utils::ReaderDynWidth;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fs::File;
 use std::io;
@@ -25,20 +26,6 @@ use std::sync::Arc;
     47...62 [59...74]	UUID	            Universally Unique Identifier	TUUID::fTimeLow through fNode[6]
     63...99 [75...99]		                Extra space to allow END, SeekFree, or SeekInfo to become 64 bit without moving this header
 */
-enum HeaderPtrWidth {
-    Off32,
-    Off64,
-}
-
-impl HeaderPtrWidth {
-    fn new(version: u32) -> Self {
-        if version >= 1_000_000 {
-            HeaderPtrWidth::Off64
-        } else {
-            HeaderPtrWidth::Off32
-        }
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct TFileHeader {
@@ -118,24 +105,16 @@ impl TFileHeader {
         let _magic = Self::parse_magic(reader)?;
         let f_version = reader.read_u32::<BigEndian>()?;
         let f_begin = reader.read_u32::<BigEndian>()?;
-
-        let header_ptr_width = HeaderPtrWidth::new(f_version);
-        let read_hdr_ptr = |r: &mut BufReader<File>| -> io::Result<u64> {
-            match header_ptr_width {
-                HeaderPtrWidth::Off64 => r.read_u64::<BigEndian>(),
-                HeaderPtrWidth::Off32 => Ok(r.read_u32::<BigEndian>()? as u64),
-            }
-        };
-
+        let reader_dyn_widht = ReaderDynWidth::from_tfile_version(f_version);
         // Read the rest of the header fields in the documented order
-        let f_end = read_hdr_ptr(reader)?;
-        let f_seek_free = read_hdr_ptr(reader)?;
+        let f_end = reader_dyn_widht.read_ptr(reader)?;
+        let f_seek_free = reader_dyn_widht.read_ptr(reader)?;
         let f_nbytes_free = reader.read_u32::<BigEndian>()?;
         let n_free = reader.read_u32::<BigEndian>()?;
         let f_nbytes_name = reader.read_u32::<BigEndian>()?;
         let f_units = Self::parse_f_unit(reader)?;
         let f_compress = reader.read_i32::<BigEndian>()?;
-        let f_seek_info = read_hdr_ptr(reader)?;
+        let f_seek_info = reader_dyn_widht.read_ptr(reader)?;
         let f_nbytes_info = reader.read_u32::<BigEndian>()?;
         let f_uuid_vers = reader.read_u16::<BigEndian>()?;
         let f_uuid = Self::parse_f_uuid(reader)?;
@@ -185,6 +164,7 @@ impl TFileHeader {
 mod tests {
     use super::*;
     use crate::first_record::FirstRecordData;
+    use crate::utils::decode_datime;
     #[test]
     fn test_read_root_header() {
         let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
@@ -229,17 +209,5 @@ mod tests {
         );
         dbg!(&first_data_key);
         dbg!(&first_data_data);
-    }
-    fn decode_datime(datime: u32) -> String {
-        let year = ((datime >> 26) & 0x3F) + 1995;
-        let month = (datime >> 22) & 0x0F;
-        let day = (datime >> 17) & 0x1F;
-        let hour = (datime >> 12) & 0x1F;
-        let minute = (datime >> 6) & 0x3F;
-        let second = datime & 0x3F;
-        format!(
-            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-            year, month, day, hour, minute, second
-        )
     }
 }
