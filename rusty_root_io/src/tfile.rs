@@ -1,6 +1,5 @@
-use crate::compression::HasCompressedData;
-use crate::streamerinfo::StreamerInfo;
-use crate::tkey::TKeyHeader;
+use crate::first_record::FirstRecordDict;
+use crate::tkey::TKey;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fs::File;
 use std::io;
@@ -63,8 +62,9 @@ pub struct TFileHeader {
 pub struct TFile {
     reader: BufReader<File>,
     pub header: TFileHeader,
-    pub streamer_info: StreamerInfo,
+    pub first_data_record: FirstRecordDict,
     pub contents: Arc<[u8]>,
+    // pub streamer_info: StreamerInfo,
     // other fields...
 }
 impl TFile {
@@ -72,18 +72,16 @@ impl TFile {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let header = TFileHeader::read_header(&mut reader)?;
-        let mut streamer_info_header =
-            TKeyHeader::read_tkey_at_save_payload(&mut reader, header.f_seek_info, header.f_units)?;
-        streamer_info_header.decompress_and_store(header.f_compress)?;
-        // streamer_info_header.decompress_and_store(header.f_compress)?;
-        // let mut streamer_info = StreamerInfo::default();
-        // streamer_info.streamer_info_header = streamer_info_header;
-        let streamer_info = StreamerInfo::new(streamer_info_header)?;
+        let first_data_record = FirstRecordDict::read_first_record_dict(
+            &mut reader,
+            header.f_begin as u64,
+            header.f_units,
+        )?;
         let contents = Arc::new([]);
         Ok(TFile {
             reader,
             header,
-            streamer_info,
+            first_data_record,
             contents,
         })
     }
@@ -92,18 +90,17 @@ impl TFile {
         &mut self.reader
     }
 
-    pub fn read_next_key(&mut self, offset: u64) -> Result<TKeyHeader, io::Error> {
-        let key = TKeyHeader::read_tkey_at(&mut self.reader, offset, self.header.f_units)?;
+    pub fn read_next_key(&mut self, offset: u64) -> Result<TKey, io::Error> {
+        let key = TKey::read_tkey_at(&mut self.reader, offset, self.header.f_units)?;
         dbg!(&key);
         Ok(key)
     }
 
-    pub fn read_all_keys(&mut self) -> Result<Vec<TKeyHeader>, io::Error> {
+    pub fn read_all_keys(&mut self) -> Result<Vec<TKey>, io::Error> {
         let mut keys = Vec::new();
         let mut current_offset = self.header.f_begin as u64;
         while current_offset < self.header.f_seek_info {
-            let key =
-                TKeyHeader::read_tkey_at(&mut self.reader, current_offset, self.header.f_units)?;
+            let key = TKey::read_tkey_at(&mut self.reader, current_offset, self.header.f_units)?;
             dbg!(&key);
             current_offset += key.n_bytes as u64;
             keys.push(key);
@@ -187,7 +184,7 @@ impl TFileHeader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tdictionary::TFileHeaderDictData;
+    use crate::first_record::FirstRecordData;
     #[test]
     fn test_read_root_header() {
         let path = "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/output.root";
@@ -206,8 +203,9 @@ mod tests {
         let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
         let tkey_offset = tfile.header.f_begin as u64;
         let f_units = tfile.header.f_units;
-        let key = TKeyHeader::read_tkey_at(tfile.reader_mut(), tkey_offset, f_units)
+        let key = TKey::read_tkey_at(tfile.reader_mut(), tkey_offset, f_units)
             .expect("Failed to read TKey at offset");
+        assert_eq!(key.name, "user.holau.700590.Sh_2212_llvvjj_ss.e8433_s3681_r13167_r13146_p6697.46550259._000001.output.root");
         dbg!(&key);
     }
 
@@ -218,10 +216,11 @@ mod tests {
         let mut tfile = TFile::open(path).expect("Failed to open ROOT file");
         let begin = tfile.header.f_begin as u64;
         let f_units = tfile.header.f_units;
+        dbg!(begin, f_units);
         let reader = tfile.reader_mut();
-        let first_data_key = TKeyHeader::read_tkey_at(reader, begin as u64, f_units)
+        let first_data_key = TKey::read_tkey_at(reader, begin as u64, f_units)
             .expect("Failed to read TKey at offset");
-        let first_data_data = TFileHeaderDictData::read_header_dict_data(reader)
+        let first_data_data = FirstRecordData::read_header_dict_data(reader)
             .expect("Failed to read header dict data at offset");
         assert_eq!(decode_datime(first_data_key.datime), "2025-09-27 06:16:14");
         assert_eq!(

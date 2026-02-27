@@ -1,6 +1,6 @@
 use crate::constant::{K_BYTECOUNTMASK, K_NEWCLASSTAG};
 use crate::tbuf::TBuf;
-use crate::tkey::TKeyHeader;
+use crate::tkey::TKey;
 use crate::tlist::TList;
 use std::io;
 
@@ -27,7 +27,7 @@ impl Default for ClassInfoTag {
 
 #[derive(Debug, Default)]
 pub struct StreamerInfo {
-    pub streamer_info_header: TKeyHeader,
+    pub streamer_info_header: TKey,
     pub tlist: TList,
     // pub tnamed: TNamed,
     pub tstreamerinfo: TStreamerInfo,
@@ -236,119 +236,4 @@ pub struct TStreamer {
     pub elements: Vec<TStreamerElement>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BuiltinDataType {
-    Char = 1,
-    Short = 2,
-    Int = 3,
-    Long = 4,
-    Float = 5,
-    Double = 8,
-    UChar = 11,
-    UShort = 12,
-    UInt = 13,
-    ULong = 14,
-    ArrayDim = 6,
-    BitMask = 15,
-}
-impl BuiltinDataType {
-    fn from_code(c: i32) -> Option<Self> {
-        use BuiltinDataType::*;
-        Some(match c {
-            1 => Char,
-            2 => Short,
-            3 => Int,
-            4 => Long,
-            5 => Float,
-            8 => Double,
-            11 => UChar,
-            12 => UShort,
-            13 => UInt,
-            14 => ULong,
-            15 => BitMask,
-            6 => ArrayDim,
-            _ => return None,
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FType {
-    BaseClass,                       // 0
-    Builtin(BuiltinDataType),        // 1.. etc.
-    ArrayOfBuiltin(BuiltinDataType), // 20 + X
-    PtrToBuiltin(BuiltinDataType),   // 40 + X
-    TString,                         // 65
-    TObject,                         // 66
-    TNamed,                          // 67
-    ObjDataMemberDerived,            // 61
-    ObjDataMemberPlain,              // 62
-    PtrObjNonNull,                   // 63
-    PtrObjMaybeNull,                 // 64
-    PtrArrayOfObjects,               // 501
-    STLContainer,                    // 500 (includes std::string & containers)
-}
-impl Default for FType {
-    fn default() -> Self {
-        FType::BaseClass
-    }
-}
-
-impl core::convert::TryFrom<i32> for FType {
-    type Error = ();
-    fn try_from(t: i32) -> Result<Self, Self::Error> {
-        use FType::*;
-        if t == 0 {
-            return Ok(BaseClass);
-        }
-        if let Some(b) = BuiltinDataType::from_code(t) {
-            return Ok(Builtin(b));
-        }
-        if (20..40).contains(&t) {
-            if let Some(b) = BuiltinDataType::from_code(t - 20) {
-                return Ok(ArrayOfBuiltin(b));
-            }
-        }
-        if (40..60).contains(&t) {
-            if let Some(b) = BuiltinDataType::from_code(t - 40) {
-                return Ok(PtrToBuiltin(b));
-            }
-        }
-        Ok(match t {
-            61 => ObjDataMemberDerived,
-            62 => ObjDataMemberPlain,
-            63 => PtrObjNonNull,
-            64 => PtrObjMaybeNull,
-            65 => TString,
-            66 => TObject,
-            67 => TNamed,
-            500 => STLContainer,
-            501 => PtrArrayOfObjects,
-            _ => return Err(()),
-        })
-    }
-}
-
-impl StreamerInfo {
-    pub fn new(tkey: TKeyHeader) -> Result<Self, std::io::Error> {
-        let data = match &tkey.decompressed_data {
-            Some(d) => d,
-            None => panic!("No decompressed data available"),
-        };
-        let mut cursor = TBuf::new(data);
-        let tlist = TList::new_from_streamerinfo(&mut cursor)?;
-        let tstreamerinfo = TStreamerInfo::new_from_streamerinfo(&mut cursor)?;
-        // let tnamed = TNamed::new_from_streamerinfo(&mut cursor)?;
-        // let f_checksum = cursor.read_u32()?;
-        // let f_class_version = cursor.read_u32()?;
-        // let tobj_array = TObjArray::new_from_streamerinfo(&mut cursor)?;
-
-        Ok(StreamerInfo {
-            streamer_info_header: tkey,
-            tlist: tlist,
-            // tnamed,
-            tstreamerinfo,
-            // tobj_array,
-        })
-    }
-}
+impl StreamerInfo {}
