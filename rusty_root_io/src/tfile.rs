@@ -204,25 +204,6 @@ mod tests {
         dbg!(&tfile);
     }
     #[test]
-    fn test_read_tfile_keys() {
-        let path =
-            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
-        let mut tfile = TFile::open(path).expect("Failed to open TFile");
-        let next_key_offset = tfile.first_data_record.data.seek_keys;
-        let next_key = TKey::read_tkey_at(&mut tfile.reader, next_key_offset)
-            .expect("Failed to read next TKey at offset");
-        dbg!(&next_key);
-        // Move 4 bytes forward in the reader before reading the next key
-        use std::io::Seek;
-        tfile
-            .reader
-            .seek_relative(4)
-            .expect("Failed to move 4 bytes forward");
-        let next_next_key =
-            TKey::read_tkey(&mut tfile.reader).expect("Failed to read next-next TKey at offset");
-        dbg!(&next_next_key);
-    }
-    #[test]
     fn test_read_keylist() {
         let path =
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
