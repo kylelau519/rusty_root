@@ -65,18 +65,17 @@ impl TKey {
             title: String::new(),
         }
     }
-    pub fn read_tkey_at(reader: &mut BufReader<File>, offset: u64, f_unit: u8) -> io::Result<Self> {
-        let header_ptr_width = ReaderDynWidth::from_unit(f_unit);
+    pub fn read_tkey_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
-
         let n_bytes = reader.read_u32::<BigEndian>()?;
         let version = reader.read_u16::<BigEndian>()?;
         let obj_len = reader.read_u32::<BigEndian>()?;
         let datime = reader.read_u32::<BigEndian>()?;
         let key_len = reader.read_u16::<BigEndian>()?;
         let cycle = reader.read_u16::<BigEndian>()?;
-        let seek_key = header_ptr_width.read_ptr(reader)?;
-        let seek_p_dir = header_ptr_width.read_ptr(reader)?;
+        let reader_dyn_width = ReaderDynWidth::from_tkey_version(version);
+        let seek_key = reader_dyn_width.read_ptr(reader)?;
+        let seek_p_dir = reader_dyn_width.read_ptr(reader)?;
         let l_class_name = Self::parse_lname(reader)?;
         let class_name = Self::parse_string(reader, l_class_name as usize)?;
         let l_name = Self::parse_lname(reader)?;
@@ -100,6 +99,11 @@ impl TKey {
             title,
         };
         Ok(key)
+    }
+
+    pub fn read_tkey(reader: &mut BufReader<File>) -> io::Result<Self> {
+        let loc = reader.seek(SeekFrom::Current(0))?;
+        TKey::read_tkey_at(reader, loc)
     }
 
     fn parse_lname(reader: &mut BufReader<File>) -> io::Result<u8> {
@@ -130,8 +134,9 @@ impl fmt::Debug for TKey {
             .field("cycle", &self.cycle)
             .field("seek_key", &self.seek_key)
             .field("seek_p_dir", &self.seek_p_dir)
-            .field("l_name", &self.l_name)
+            .field("l_class_name", &self.l_class_name)
             .field("class_name", &self.class_name)
+            .field("l_name", &self.l_name)
             .field("name", &self.name)
             .field("l_title", &self.l_title)
             .field("title", &self.title)
@@ -189,8 +194,8 @@ impl TKeyHeader {
         }
     }
 
-    pub fn read_tkey_at(reader: &mut BufReader<File>, offset: u64, f_unit: u8) -> io::Result<Self> {
-        let key = TKey::read_tkey_at(reader, offset, f_unit)?;
+    pub fn read_tkey_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+        let key = TKey::read_tkey_at(reader, offset)?;
         let keyheader = TKeyHeader {
             base_key: key,
             compressed_data: Vec::new(),
@@ -202,9 +207,8 @@ impl TKeyHeader {
     pub fn read_tkey_at_save_payload(
         reader: &mut BufReader<File>,
         offset: u64,
-        f_unit: u8,
     ) -> io::Result<Self> {
-        let mut keyheader = Self::read_tkey_at(reader, offset, f_unit)?;
+        let mut keyheader = Self::read_tkey_at(reader, offset)?;
         keyheader.compressed_data = keyheader.parse_payload(reader)?;
         Ok(keyheader)
     }

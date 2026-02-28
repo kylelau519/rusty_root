@@ -12,12 +12,8 @@ pub struct FirstRecordDict {
 }
 
 impl FirstRecordDict {
-    pub fn read_first_record_dict(
-        reader: &mut BufReader<File>,
-        offset: u64,
-        f_unit: u8,
-    ) -> io::Result<Self> {
-        let key = TKey::read_tkey_at(reader, offset, f_unit)?;
+    pub fn read_first_record_dict(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+        let key = TKey::read_tkey_at(reader, offset)?;
         let data = FirstRecordData::read_header_dict_data(reader)?;
         Ok(Self { key, data })
     }

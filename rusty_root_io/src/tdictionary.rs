@@ -1,4 +1,9 @@
+use std::io::{BufReader, Read, Seek};
+
 use crate::tkey::TKey;
+use crate::utils::ReaderDynWidth;
+use byteorder::ReadBytesExt;
+use std::fs::File;
 
 /*
 * ----------TKey--------------
@@ -32,6 +37,7 @@ use crate::tkey::TKey;
       32->47 [44->59] UUID      = Universally Unique Identifier                                 TUUID::fTimeLow through fNode[6]
       48->59          Extra space to allow SeekKeys to become 64 bit without moving this header
 */
+#[derive(Debug)]
 pub struct TDictData {
     version: u16,
     datime_c: u32,
@@ -45,7 +51,63 @@ pub struct TDictData {
     uuid: [u8; 16],
 }
 
+#[derive(Debug)]
 pub struct TDictionary {
     tkey: TKey,
     data: TDictData,
+}
+
+impl TDictData {
+    pub fn read_dict_data_at(reader: &mut BufReader<File>, offset: u64) -> std::io::Result<Self> {
+        reader.seek(std::io::SeekFrom::Start(offset))?;
+        let version = reader.read_u16::<byteorder::BigEndian>()?;
+        let reader_dyn_width = ReaderDynWidth::from_tkey_version(version); // TDirectory uses version 1000 for 64-bit offsets
+        let datime_c = reader.read_u32::<byteorder::BigEndian>()?;
+        let datime_m = reader.read_u32::<byteorder::BigEndian>()?;
+        let n_bytes_keys = reader.read_u32::<byteorder::BigEndian>()?;
+        let n_bytes_name = reader.read_u32::<byteorder::BigEndian>()?;
+        let seek_dir = reader_dyn_width.read_ptr(reader)?;
+        let seek_parent = reader_dyn_width.read_ptr(reader)?;
+        let seek_keys = reader_dyn_width.read_ptr(reader)?;
+        let uuid_vers = reader.read_u16::<byteorder::BigEndian>()?;
+        let mut uuid = [0u8; 16];
+        reader.read_exact(&mut uuid)?;
+        match reader_dyn_width {
+            ReaderDynWidth::Off32 => {
+                let mut skip_buf = [0u8; 12];
+                reader.read_exact(&mut skip_buf)?;
+            }
+            ReaderDynWidth::Off64 => {}
+        }
+        Ok(Self {
+            version,
+            datime_c,
+            datime_m,
+            n_bytes_keys,
+            n_bytes_name,
+            seek_dir,
+            seek_parent,
+            seek_keys,
+            uuid_vers,
+            uuid,
+        })
+    }
+
+    pub fn read_dict_data(reader: &mut BufReader<File>) -> std::io::Result<Self> {
+        let loc = reader.seek(std::io::SeekFrom::Current(0))?;
+        Self::read_dict_data_at(reader, loc)
+    }
+}
+
+impl TDictionary {
+    pub fn read_tdict_at(reader: &mut BufReader<File>, offset: u64) -> std::io::Result<Self> {
+        let tkey = TKey::read_tkey_at(reader, offset)?;
+        let data = TDictData::read_dict_data(reader)?;
+        Ok(Self { tkey, data })
+    }
+
+    pub fn read_tdict(reader: &mut BufReader<File>) -> std::io::Result<Self> {
+        let loc = reader.seek(std::io::SeekFrom::Current(0))?;
+        Self::read_tdict_at(reader, loc)
+    }
 }

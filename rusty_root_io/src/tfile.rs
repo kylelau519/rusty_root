@@ -1,4 +1,5 @@
 use crate::first_record::FirstRecordDict;
+use crate::keylist::KeyList;
 use crate::tkey::TKey;
 use crate::utils::ReaderDynWidth;
 use byteorder::{BigEndian, ReadBytesExt};
@@ -50,6 +51,7 @@ pub struct TFile {
     reader: BufReader<File>,
     pub header: TFileHeader,
     pub first_data_record: FirstRecordDict,
+    pub key_list: KeyList,
     pub contents: Arc<[u8]>,
     // pub streamer_info: StreamerInfo,
     // other fields...
@@ -59,40 +61,22 @@ impl TFile {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let header = TFileHeader::read_header(&mut reader)?;
-        let first_data_record = FirstRecordDict::read_first_record_dict(
-            &mut reader,
-            header.f_begin as u64,
-            header.f_units,
-        )?;
+        let first_data_record =
+            FirstRecordDict::read_first_record_dict(&mut reader, header.f_begin as u64)?;
+        let key_list_offset = first_data_record.data.seek_keys;
+        let key_list = KeyList::read_keylist_at(&mut reader, key_list_offset)?;
         let contents = Arc::new([]);
         Ok(TFile {
             reader,
             header,
             first_data_record,
+            key_list,
             contents,
         })
     }
 
     pub fn reader_mut(&mut self) -> &mut BufReader<File> {
         &mut self.reader
-    }
-
-    pub fn read_next_key(&mut self, offset: u64) -> Result<TKey, io::Error> {
-        let key = TKey::read_tkey_at(&mut self.reader, offset, self.header.f_units)?;
-        dbg!(&key);
-        Ok(key)
-    }
-
-    pub fn read_all_keys(&mut self) -> Result<Vec<TKey>, io::Error> {
-        let mut keys = Vec::new();
-        let mut current_offset = self.header.f_begin as u64;
-        while current_offset < self.header.f_seek_info {
-            let key = TKey::read_tkey_at(&mut self.reader, current_offset, self.header.f_units)?;
-            dbg!(&key);
-            current_offset += key.n_bytes as u64;
-            keys.push(key);
-        }
-        Ok(keys)
     }
 }
 
@@ -164,6 +148,7 @@ impl TFileHeader {
 mod tests {
     use super::*;
     use crate::first_record::FirstRecordData;
+    use crate::tdictionary::{TDictData, TDictionary};
     use crate::utils::decode_datime;
     #[test]
     fn test_read_root_header() {
@@ -183,9 +168,8 @@ mod tests {
         let file = File::open(path).expect("Failed to open ROOT file");
         let mut reader = BufReader::new(file);
         let tkey_offset = 100u64;
-        let f_units = 4u8;
-        let key = TKey::read_tkey_at(&mut reader, tkey_offset, f_units)
-            .expect("Failed to read TKey at offset");
+        let key =
+            TKey::read_tkey_at(&mut reader, tkey_offset).expect("Failed to read TKey at offset");
         assert_eq!(key.name, "user.holau.700590.Sh_2212_llvvjj_ss.e8433_s3681_r13167_r13146_p6697.46550259._000001.output.root");
         dbg!(&key);
     }
@@ -200,7 +184,7 @@ mod tests {
         let f_units = 4u8;
         dbg!(begin, f_units);
         let first_data_key =
-            TKey::read_tkey_at(&mut reader, begin, f_units).expect("Failed to read TKey at offset");
+            TKey::read_tkey_at(&mut reader, begin).expect("Failed to read TKey at offset");
         let first_data_data = FirstRecordData::read_header_dict_data(&mut reader)
             .expect("Failed to read header dict data at offset");
         assert_eq!(decode_datime(first_data_key.datime), "2025-09-27 06:16:14");
@@ -218,5 +202,66 @@ mod tests {
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
         let tfile = TFile::open(path).expect("Failed to open TFile");
         dbg!(&tfile);
+    }
+    #[test]
+    fn test_read_tfile_keys() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let mut tfile = TFile::open(path).expect("Failed to open TFile");
+        let next_key_offset = tfile.first_data_record.data.seek_keys;
+        let next_key = TKey::read_tkey_at(&mut tfile.reader, next_key_offset)
+            .expect("Failed to read next TKey at offset");
+        dbg!(&next_key);
+        // Move 4 bytes forward in the reader before reading the next key
+        use std::io::Seek;
+        tfile
+            .reader
+            .seek_relative(4)
+            .expect("Failed to move 4 bytes forward");
+        let next_next_key =
+            TKey::read_tkey(&mut tfile.reader).expect("Failed to read next-next TKey at offset");
+        dbg!(&next_next_key);
+    }
+    #[test]
+    fn test_read_keylist() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let key_list_offset = 80365942;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+        let key_list = KeyList::read_keylist_at(&mut reader, key_list_offset)
+            .expect("Failed to read KeyList at offset");
+        dbg!(&key_list);
+    }
+
+    #[test]
+    fn test_read_tfile_keys_list() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let mut tfile = TFile::open(path).expect("Failed to open TFile");
+        let next_key_offset = tfile.first_data_record.data.seek_keys;
+        let next_key = TKey::read_tkey_at(&mut tfile.reader, next_key_offset)
+            .expect("Failed to read next TKey at offset");
+        dbg!(&next_key);
+        // Seek to the offset of the next key
+        tfile
+            .reader
+            .seek_relative(0)
+            .expect("Failed to seek to next key offset");
+        let mut buf = [0u8; 1395];
+        tfile
+            .reader
+            .read_exact(&mut buf)
+            .expect("Failed to read 1000 bytes from file");
+
+        let mut ascii_out = String::new();
+        for &b in &buf {
+            if b.is_ascii_graphic() || b == b' ' || b == b'\n' || b == b'\r' || b == b'\t' {
+                ascii_out.push(b as char);
+            } else {
+                ascii_out.push_str(&format!("[{:02x}]", b));
+            }
+        }
+        println!("{}", ascii_out);
     }
 }
