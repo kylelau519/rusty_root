@@ -1,9 +1,10 @@
 use crate::tkey::TKey;
+use crate::utils;
 use crate::utils::ReaderDynWidth;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fs::File;
 use std::io;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io::{BufReader, Seek, SeekFrom};
 
 #[derive(Default, Debug)]
 pub struct FirstRecordDict {
@@ -39,7 +40,7 @@ impl FirstRecordDict {
  */
 #[derive(Default, Debug)]
 pub struct FirstRecordData {
-    pub lname: u8,
+    pub l_name: u8,
     pub name: String,
     pub l_title: u8,
     pub title: String,
@@ -55,23 +56,29 @@ pub struct FirstRecordData {
 
 impl FirstRecordData {
     pub fn read_header_dict_data(reader: &mut BufReader<File>) -> io::Result<Self> {
-        let lname = Self::parse_lname(reader)?;
-        let name = Self::parse_string(reader, lname as usize)?;
-        let l_title = Self::parse_lname(reader)?;
-        let title = Self::parse_string(reader, l_title as usize)?;
+        let loc = reader.seek(SeekFrom::Current(0))?;
+        Self::read_header_dict_data_at(reader, loc)
+    }
+
+    pub fn read_header_dict_data_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+        reader.seek(SeekFrom::Start(offset))?;
+        let l_name = utils::read_u1(reader)?;
+        let name = utils::read_string(reader, l_name as usize)?;
+        let l_title = utils::read_u1(reader)?;
+        let title = utils::read_string(reader, l_title as usize)?;
         let version = reader.read_u16::<BigEndian>()?;
         let datime_c = reader.read_u32::<BigEndian>()?;
         let datime_m = reader.read_u32::<BigEndian>()?;
         let n_bytes_keys = reader.read_u32::<BigEndian>()?;
         let n_bytes_name = reader.read_u32::<BigEndian>()?;
 
-        let reader_dyn_width = ReaderDynWidth::from_tkey_version(version);
+        let reader_dyn_width = ReaderDynWidth::from_tkey_version(version); // TDirectory uses version 1000 for 64-bit offsets
         let seek_dir = reader_dyn_width.read_ptr(reader)?;
         let seek_parent = reader_dyn_width.read_ptr(reader)?;
         let seek_keys = reader_dyn_width.read_ptr(reader)?;
 
         Ok(Self {
-            lname,
+            l_name,
             name,
             l_title,
             title,
@@ -84,49 +91,5 @@ impl FirstRecordData {
             seek_parent,
             seek_keys,
         })
-    }
-
-    pub fn read_header_dict_data_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
-        reader.seek(SeekFrom::Start(offset))?;
-        let lname = Self::parse_lname(reader)?;
-        let name = Self::parse_string(reader, lname as usize)?;
-        let l_title = Self::parse_lname(reader)?;
-        let title = Self::parse_string(reader, l_title as usize)?;
-        let version = reader.read_u16::<BigEndian>()?;
-        let datime_c = reader.read_u32::<BigEndian>()?;
-        let datime_m = reader.read_u32::<BigEndian>()?;
-        let n_bytes_keys = reader.read_u32::<BigEndian>()?;
-        let n_bytes_name = reader.read_u32::<BigEndian>()?;
-        let seek_dir = reader.read_u64::<BigEndian>()?;
-        let seek_parent = reader.read_u64::<BigEndian>()?;
-        let seek_keys = reader.read_u64::<BigEndian>()?;
-
-        Ok(Self {
-            lname,
-            name,
-            l_title,
-            title,
-            version,
-            datime_c,
-            datime_m,
-            n_bytes_keys,
-            n_bytes_name,
-            seek_dir,
-            seek_parent,
-            seek_keys,
-        })
-    }
-
-    fn parse_lname(reader: &mut BufReader<File>) -> io::Result<u8> {
-        let mut lname_buf = [0u8; 1];
-        reader.read_exact(&mut lname_buf)?;
-        Ok(lname_buf[0])
-    }
-
-    fn parse_string(reader: &mut BufReader<File>, length: usize) -> io::Result<String> {
-        let mut str_buf = vec![0u8; length];
-        reader.read_exact(&mut str_buf)?;
-        let s = String::from_utf8_lossy(&str_buf).to_string();
-        Ok(s)
     }
 }

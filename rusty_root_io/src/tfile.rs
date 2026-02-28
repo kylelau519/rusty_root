@@ -1,6 +1,7 @@
 use crate::first_record::FirstRecordDict;
 use crate::keylist::KeyList;
 use crate::tkey::TKey;
+use crate::utils;
 use crate::utils::ReaderDynWidth;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fs::File;
@@ -148,7 +149,6 @@ impl TFileHeader {
 mod tests {
     use super::*;
     use crate::first_record::FirstRecordData;
-    use crate::tdictionary::{TDictData, TDictionary};
     use crate::utils::decode_datime;
     #[test]
     fn test_read_root_header() {

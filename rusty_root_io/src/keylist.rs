@@ -1,7 +1,7 @@
 use crate::tkey::TKey;
 use byteorder::ReadBytesExt;
 use std::fs::File;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io::{BufReader, Seek, SeekFrom};
 
 // https://root.cern/doc/v638/keyslist.html
 /*

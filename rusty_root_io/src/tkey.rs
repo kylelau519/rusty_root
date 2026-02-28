@@ -7,6 +7,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::compression::HasCompressedData;
+use crate::utils;
 use crate::utils::ReaderDynWidth;
 
 /*
@@ -76,12 +77,12 @@ impl TKey {
         let reader_dyn_width = ReaderDynWidth::from_tkey_version(version);
         let seek_key = reader_dyn_width.read_ptr(reader)?;
         let seek_p_dir = reader_dyn_width.read_ptr(reader)?;
-        let l_class_name = Self::parse_lname(reader)?;
-        let class_name = Self::parse_string(reader, l_class_name as usize)?;
-        let l_name = Self::parse_lname(reader)?;
-        let name = Self::parse_string(reader, l_name as usize)?;
-        let l_title = Self::parse_lname(reader)?;
-        let title = Self::parse_string(reader, l_title as usize)?;
+        let l_class_name = utils::read_u1(reader)?;
+        let class_name = utils::read_string(reader, l_class_name as usize)?;
+        let l_name = utils::read_u1(reader)?;
+        let name = utils::read_string(reader, l_name as usize)?;
+        let l_title = utils::read_u1(reader)?;
+        let title = utils::read_string(reader, l_title as usize)?;
         let key = TKey {
             n_bytes,
             version,
@@ -104,23 +105,6 @@ impl TKey {
     pub fn read_tkey(reader: &mut BufReader<File>) -> io::Result<Self> {
         let loc = reader.seek(SeekFrom::Current(0))?;
         TKey::read_tkey_at(reader, loc)
-    }
-
-    fn parse_lname(reader: &mut BufReader<File>) -> io::Result<u8> {
-        let mut lname_buf = [0u8; 1];
-        reader.read_exact(&mut lname_buf)?;
-        Ok(lname_buf[0])
-    }
-
-    fn parse_string(reader: &mut BufReader<File>, length: usize) -> io::Result<String> {
-        let mut str_buf = vec![0u8; length];
-        reader.read_exact(&mut str_buf)?;
-        let s = String::from_utf8_lossy(&str_buf).to_string();
-        Ok(s)
-    }
-
-    pub fn decode_datime(&self) -> String {
-        crate::utils::decode_datime(self.datime)
     }
 }
 impl fmt::Debug for TKey {
@@ -255,11 +239,11 @@ impl HasCompressedData for TKeyHeader {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use crate::utils::decode_datime;
     #[test]
     fn test_decode_datime() {
         let mut key = TKey::new();
         key.datime = 2054579214;
-        assert_eq!(key.decode_datime(), "2025-09-27 06:16:14");
+        assert_eq!(decode_datime(key.datime), "2025-09-27 06:16:14");
     }
 }

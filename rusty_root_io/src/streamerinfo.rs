@@ -5,26 +5,6 @@ use crate::tlist::TList;
 use std::io;
 
 // https://root.cern/doc/v638/streamerinfo.html
-#[derive(Debug)]
-pub enum ClassInfoTag {
-    NewClass,
-    ClIdx(u32),
-}
-impl ClassInfoTag {
-    fn from_tag(tag: u32) -> Self {
-        if (tag & K_NEWCLASSTAG) != 0 {
-            ClassInfoTag::NewClass
-        } else {
-            ClassInfoTag::ClIdx(tag)
-        }
-    }
-}
-impl Default for ClassInfoTag {
-    fn default() -> Self {
-        ClassInfoTag::ClIdx(0)
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct StreamerInfo {
     pub streamer_info_header: TKey,

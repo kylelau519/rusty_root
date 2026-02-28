@@ -1,6 +1,7 @@
 use byteorder::{BigEndian, ReadBytesExt};
+use std::fs::File;
 use std::io;
-use std::io::Read;
+use std::io::{BufReader, Read};
 
 pub enum ReaderDynWidth {
     Off32,
@@ -51,4 +52,17 @@ pub fn decode_datime(datime: u32) -> String {
         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
         year, month, day, hour, minute, second
     )
+}
+
+pub fn read_string(reader: &mut BufReader<File>, length: usize) -> io::Result<String> {
+    let mut str_buf = vec![0u8; length];
+    reader.read_exact(&mut str_buf)?;
+    let s = String::from_utf8_lossy(&str_buf).to_string();
+    Ok(s)
+}
+
+pub fn read_u1(reader: &mut BufReader<File>) -> io::Result<u8> {
+    let mut buf = [0u8; 1];
+    reader.read_exact(&mut buf)?;
+    Ok(buf[0])
 }
