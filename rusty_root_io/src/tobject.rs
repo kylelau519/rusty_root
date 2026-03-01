@@ -31,6 +31,7 @@ use std::io::{BufReader, Seek, SeekFrom};
       fBits will be 0x03000000, and pidf will be absent.
 */
 
+#[derive(Debug, Default)]
 pub struct TObject {
     pub version: u16,
     pub f_uniqueid: u32,

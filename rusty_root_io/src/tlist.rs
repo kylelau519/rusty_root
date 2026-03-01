@@ -3,16 +3,17 @@ use byteorder::ReadBytesExt;
 use std::fs::File;
 use std::io::{BufReader, Seek, SeekFrom};
 
-#[derive(Default)]
-pub struct TList {
+#[derive(Default, Debug)]
+pub struct TList<T> {
     pub byte_count: u32,
     pub version: u16,
     pub f_name_byte: u8,
     pub f_name: String,
     pub n_objects: u32,
+    pub objects: Vec<T>,
 }
 
-impl TList {
+impl TList<()> {
     pub fn read_tlist_at(reader: &mut BufReader<File>, offset: u64) -> std::io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
         let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
@@ -26,6 +27,7 @@ impl TList {
             f_name_byte,
             f_name,
             n_objects,
+            objects: Vec::new(), // Placeholder, as we don't know the type T or how to read it yet
         })
     }
     pub fn read_tlist(reader: &mut BufReader<File>) -> std::io::Result<Self> {

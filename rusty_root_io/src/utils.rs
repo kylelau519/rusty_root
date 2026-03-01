@@ -41,6 +41,45 @@ impl ReaderDynWidth {
     }
 }
 
+// class info mainly for streamer info
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClassInfo {
+    NewClass(String),
+    Offset(u32),
+}
+
+impl Default for ClassInfo {
+    fn default() -> Self {
+        ClassInfo::Offset(0)
+    }
+}
+
+impl ClassInfo {
+    pub fn read_class_info(reader: &mut BufReader<File>) -> io::Result<Self> {
+        let tag = reader.read_u32::<BigEndian>()?;
+        if tag == crate::constant::K_NEWCLASSTAG {
+            let mut name = Vec::new();
+            let mut byte = [0u8; 1];
+            loop {
+                reader.read_exact(&mut byte)?;
+                if byte[0] == 0 {
+                    break;
+                }
+                name.push(byte[0]);
+            }
+            let class_name = String::from_utf8_lossy(&name).into_owned();
+            Ok(ClassInfo::NewClass(class_name))
+        } else {
+            let offset = if tag & crate::constant::K_NEW_CLASSBIT != 0 {
+                (tag & !crate::constant::K_NEW_CLASSBIT) - crate::constant::K_MAP_OFFSET
+            } else {
+                tag
+            };
+            Ok(ClassInfo::Offset(offset))
+        }
+    }
+}
+
 pub fn decode_datime(datime: u32) -> String {
     let year = (datime >> 26) + 1995;
     let month = (datime >> 22) & 0xF;

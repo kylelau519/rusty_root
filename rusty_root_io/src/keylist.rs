@@ -51,3 +51,19 @@ impl KeyList {
         Self::read_keylist_at(reader, loc)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_read_keylist() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let key_list_offset = 80365942;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+        let key_list = KeyList::read_keylist_at(&mut reader, key_list_offset)
+            .expect("Failed to read KeyList at offset");
+        dbg!(&key_list);
+    }
+}
