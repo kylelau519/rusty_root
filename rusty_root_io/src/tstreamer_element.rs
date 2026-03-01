@@ -1,9 +1,8 @@
 use crate::tnamed::TNamed;
 use crate::utils::ClassInfo;
 use byteorder::ReadBytesExt;
-use std::fs::File;
 use std::io;
-use std::io::{BufReader, Read};
+use std::io::{Read, Seek};
 
 #[derive(Debug, Default)]
 pub struct TStreamerElementBase {
@@ -20,7 +19,9 @@ pub struct TStreamerElementBase {
 }
 
 impl TStreamerElementBase {
-    pub fn read_tstreamer_element_base(reader: &mut BufReader<File>) -> io::Result<Self> {
+    pub fn read_tstreamer_element_base<R: std::io::Read + std::io::Seek>(
+        reader: &mut R,
+    ) -> io::Result<Self> {
         let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
         let tnamed = TNamed::read_tnamed(reader)?;
@@ -90,7 +91,10 @@ pub struct TStreamerElement {
 }
 
 impl TStreamerType {
-    pub fn read_streamer_type(reader: &mut BufReader<File>, class_name: &str) -> io::Result<Self> {
+    pub fn read_streamer_type<R: std::io::Read + std::io::Seek>(
+        reader: &mut R,
+        class_name: &str,
+    ) -> io::Result<Self> {
         match class_name {
             "TStreamerBase" => {
                 let base_version = reader.read_u32::<byteorder::BigEndian>()?;
@@ -144,11 +148,10 @@ impl TStreamerType {
 }
 
 impl TStreamerElement {
-    pub fn read_tstreamer_element(
-        reader: &mut BufReader<File>,
+    pub fn read_tstreamer_element<R: Read + Seek>(
+        reader: &mut R,
         start_pos: u64,
     ) -> io::Result<Self> {
-        use std::io::Seek;
         let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
         let class_info = ClassInfo::read_class_info(reader)?;
 

@@ -15,7 +15,7 @@ pub struct StreamerInfo {
 }
 
 impl StreamerInfo {
-    // pub fn read_streamer_info_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+    // pub fn read_streamer_info_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
     //     reader.seek(SeekFrom::Start(offset))?;
     //     let streamer_info_header = TKey::read_tkey(reader)?;
     //     let payload_len =

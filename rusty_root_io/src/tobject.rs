@@ -40,7 +40,7 @@ pub struct TObject {
 }
 
 impl TObject {
-    pub fn read_tobject_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+    pub fn read_tobject_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         reader.seek(io::SeekFrom::Start(offset))?;
         let version = reader.read_u16::<BigEndian>()?;
         let f_uniqueid = reader.read_u32::<BigEndian>()?;
@@ -54,7 +54,7 @@ impl TObject {
         })
     }
 
-    pub fn read_tobject(reader: &mut BufReader<File>) -> io::Result<Self> {
+    pub fn read_tobject<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<Self> {
         let offset = reader.seek(SeekFrom::Current(0))?;
         Self::read_tobject_at(reader, offset)
     }

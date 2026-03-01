@@ -1,12 +1,10 @@
 use crate::first_record::FirstRecordDict;
 use crate::keylist::KeyList;
-use crate::tkey::TKey;
-use crate::utils;
 use crate::utils::ReaderDynWidth;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fs::File;
 use std::io;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Seek};
 use std::sync::Arc;
 
 /*
@@ -86,7 +84,7 @@ impl TFileHeader {
         Self::default()
     }
 
-    pub fn read_header(reader: &mut BufReader<File>) -> io::Result<Self> {
+    pub fn read_header<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
         let _magic = Self::parse_magic(reader)?;
         let f_version = reader.read_u32::<BigEndian>()?;
         let f_begin = reader.read_u32::<BigEndian>()?;
@@ -122,17 +120,17 @@ impl TFileHeader {
         };
         Ok(header)
     }
-    fn parse_f_unit(reader: &mut BufReader<File>) -> io::Result<u8> {
+    fn parse_f_unit<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<u8> {
         let mut units_buf = [0u8; 1];
         reader.read_exact(&mut units_buf)?;
         Ok(units_buf[0])
     }
-    fn parse_f_uuid(reader: &mut BufReader<File>) -> io::Result<[u8; 16]> {
+    fn parse_f_uuid<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<[u8; 16]> {
         let mut uuid_buf = [0u8; 16];
         reader.read_exact(&mut uuid_buf)?;
         Ok(uuid_buf)
     }
-    fn parse_magic(reader: &mut BufReader<File>) -> io::Result<[u8; 4]> {
+    fn parse_magic<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<[u8; 4]> {
         let mut magic_buf = [0u8; 4];
         reader.read_exact(&mut magic_buf)?;
         if &magic_buf != b"root" {

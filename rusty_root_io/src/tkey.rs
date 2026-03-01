@@ -66,7 +66,7 @@ impl TKey {
             title: String::new(),
         }
     }
-    pub fn read_tkey_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+    pub fn read_tkey_at<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
         let n_bytes = reader.read_u32::<BigEndian>()?;
         let version = reader.read_u16::<BigEndian>()?;
@@ -102,7 +102,7 @@ impl TKey {
         Ok(key)
     }
 
-    pub fn read_tkey(reader: &mut BufReader<File>) -> io::Result<Self> {
+    pub fn read_tkey<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
         let loc = reader.seek(SeekFrom::Current(0))?;
         TKey::read_tkey_at(reader, loc)
     }
@@ -178,7 +178,7 @@ impl TKeyHeader {
         }
     }
 
-    pub fn read_tkey_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+    pub fn read_tkey_at<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         let key = TKey::read_tkey_at(reader, offset)?;
         let keyheader = TKeyHeader {
             base_key: key,
@@ -188,8 +188,8 @@ impl TKeyHeader {
         Ok(keyheader)
     }
 
-    pub fn read_tkey_at_save_payload(
-        reader: &mut BufReader<File>,
+    pub fn read_tkey_at_save_payload<R: Read + Seek>(
+        reader: &mut R,
         offset: u64,
     ) -> io::Result<Self> {
         let mut keyheader = Self::read_tkey_at(reader, offset)?;
@@ -197,7 +197,7 @@ impl TKeyHeader {
         Ok(keyheader)
     }
 
-    fn parse_payload(&self, reader: &mut BufReader<File>) -> io::Result<Vec<u8>> {
+    fn parse_payload<R: Read + Seek>(&self, reader: &mut R) -> io::Result<Vec<u8>> {
         let payload_offset = self.seek_key + self.key_len as u64;
         reader.seek(SeekFrom::Start(payload_offset))?;
         let payload_buf = self.n_bytes - self.key_len as u32;

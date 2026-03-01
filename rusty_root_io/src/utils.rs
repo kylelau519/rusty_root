@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fs::File;
 use std::io;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Seek};
 
 pub enum ReaderDynWidth {
     Off32,
@@ -55,7 +55,7 @@ impl Default for ClassInfo {
 }
 
 impl ClassInfo {
-    pub fn read_class_info(reader: &mut BufReader<File>) -> io::Result<Self> {
+    pub fn read_class_info<R: Read>(reader: &mut R) -> io::Result<Self> {
         let tag = reader.read_u32::<BigEndian>()?;
         if tag == crate::constant::K_NEWCLASSTAG {
             let mut name = Vec::new();
@@ -93,14 +93,14 @@ pub fn decode_datime(datime: u32) -> String {
     )
 }
 
-pub fn read_string(reader: &mut BufReader<File>, length: usize) -> io::Result<String> {
+pub fn read_string<R: Read>(reader: &mut R, length: usize) -> io::Result<String> {
     let mut str_buf = vec![0u8; length];
     reader.read_exact(&mut str_buf)?;
     let s = String::from_utf8_lossy(&str_buf).to_string();
     Ok(s)
 }
 
-pub fn read_u1(reader: &mut BufReader<File>) -> io::Result<u8> {
+pub fn read_u1<R: Read>(reader: &mut R) -> io::Result<u8> {
     let mut buf = [0u8; 1];
     reader.read_exact(&mut buf)?;
     Ok(buf[0])

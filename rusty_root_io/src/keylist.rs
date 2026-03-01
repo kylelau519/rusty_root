@@ -36,7 +36,7 @@ pub struct KeyList {
 }
 
 impl KeyList {
-    pub fn read_keylist_at(reader: &mut BufReader<File>, offset: u64) -> std::io::Result<Self> {
+    pub fn read_keylist_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
         let key = TKey::read_tkey_at(reader, offset)?;
         let n_keys = reader.read_u32::<byteorder::BigEndian>()?;
         let mut keys = Vec::with_capacity(n_keys as usize);
@@ -46,7 +46,7 @@ impl KeyList {
         }
         Ok(Self { key, n_keys, keys })
     }
-    pub fn read_keylist(reader: &mut BufReader<File>) -> std::io::Result<Self> {
+    pub fn read_keylist<R: std::io::Read + std::io::Seek>(reader: &mut R) -> std::io::Result<Self> {
         let loc = reader.seek(SeekFrom::Current(0))?;
         Self::read_keylist_at(reader, loc)
     }

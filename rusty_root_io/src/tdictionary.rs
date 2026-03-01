@@ -58,7 +58,7 @@ pub struct TDictionary {
 }
 
 impl TDictData {
-    pub fn read_dict_data_at(reader: &mut BufReader<File>, offset: u64) -> std::io::Result<Self> {
+    pub fn read_dict_data_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
         reader.seek(std::io::SeekFrom::Start(offset))?;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
         let reader_dyn_width = ReaderDynWidth::from_tkey_version(version); // TDirectory uses version 1000 for 64-bit offsets
@@ -93,20 +93,20 @@ impl TDictData {
         })
     }
 
-    pub fn read_dict_data(reader: &mut BufReader<File>) -> std::io::Result<Self> {
+    pub fn read_dict_data<R: std::io::Read + std::io::Seek>(reader: &mut R) -> std::io::Result<Self> {
         let loc = reader.seek(std::io::SeekFrom::Current(0))?;
         Self::read_dict_data_at(reader, loc)
     }
 }
 
 impl TDictionary {
-    pub fn read_tdict_at(reader: &mut BufReader<File>, offset: u64) -> std::io::Result<Self> {
+    pub fn read_tdict_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
         let tkey = TKey::read_tkey_at(reader, offset)?;
         let data = TDictData::read_dict_data(reader)?;
         Ok(Self { tkey, data })
     }
 
-    pub fn read_tdict(reader: &mut BufReader<File>) -> std::io::Result<Self> {
+    pub fn read_tdict<R: std::io::Read + std::io::Seek>(reader: &mut R) -> std::io::Result<Self> {
         let loc = reader.seek(std::io::SeekFrom::Current(0))?;
         Self::read_tdict_at(reader, loc)
     }

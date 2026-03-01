@@ -33,7 +33,7 @@ pub struct TNamed {
 }
 
 impl TNamed {
-    pub fn read_tnamed_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+    pub fn read_tnamed_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         reader.seek(std::io::SeekFrom::Start(offset))?;
         let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
@@ -53,7 +53,7 @@ impl TNamed {
         })
     }
 
-    pub fn read_tnamed(reader: &mut BufReader<File>) -> io::Result<Self> {
+    pub fn read_tnamed<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<Self> {
         let offset = reader.seek(SeekFrom::Current(0))?;
         Self::read_tnamed_at(reader, offset)
     }

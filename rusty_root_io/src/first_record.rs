@@ -13,7 +13,7 @@ pub struct FirstRecordDict {
 }
 
 impl FirstRecordDict {
-    pub fn read_first_record_dict(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+    pub fn read_first_record_dict<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         let key = TKey::read_tkey_at(reader, offset)?;
         let data = FirstRecordData::read_header_dict_data(reader)?;
         Ok(Self { key, data })
@@ -55,12 +55,12 @@ pub struct FirstRecordData {
 }
 
 impl FirstRecordData {
-    pub fn read_header_dict_data(reader: &mut BufReader<File>) -> io::Result<Self> {
+    pub fn read_header_dict_data<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<Self> {
         let loc = reader.seek(SeekFrom::Current(0))?;
         Self::read_header_dict_data_at(reader, loc)
     }
 
-    pub fn read_header_dict_data_at(reader: &mut BufReader<File>, offset: u64) -> io::Result<Self> {
+    pub fn read_header_dict_data_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
         let l_name = utils::read_u1(reader)?;
         let name = utils::read_string(reader, l_name as usize)?;
