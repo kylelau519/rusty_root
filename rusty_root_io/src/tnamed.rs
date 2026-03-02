@@ -1,3 +1,4 @@
+use crate::constant::K_BYTECOUNTMASK;
 use crate::tobject::TObject;
 use crate::utils;
 use byteorder::ReadBytesExt;
@@ -34,7 +35,7 @@ pub struct TNamed {
 impl TNamed {
     pub fn read_tnamed_at<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         reader.seek(std::io::SeekFrom::Start(offset))?;
-        let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
+        let byte_count = reader.read_u32::<byteorder::BigEndian>()? & K_BYTECOUNTMASK;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
         let tobject = TObject::read_tobject(reader)?;
         let l_name = utils::read_u1(reader)?;

@@ -1,7 +1,8 @@
 use crate::tobject::TObject;
 use crate::utils;
+use binrw::io::{Read, Seek, SeekFrom};
+use binrw::BinRead;
 use byteorder::ReadBytesExt;
-use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Default, Debug)]
 pub struct TList<T> {
@@ -14,11 +15,11 @@ pub struct TList<T> {
     pub objects: Vec<T>,
 }
 
-impl TList<()> {
-    pub fn read_tlist_at<R: std::io::Read + std::io::Seek>(
-        reader: &mut R,
-        offset: u64,
-    ) -> std::io::Result<Self> {
+impl<T> TList<T>
+where
+    T: BinRead,
+{
+    pub fn read_tlist_at<R: Read + Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
         let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
@@ -62,5 +63,10 @@ impl TList<()> {
             n_objects,
             objects: Vec::new(), // Placeholder, as we don't know the type T or how to read it yet
         })
+    }
+
+    pub fn read_tlist_metadata<R: Read + Seek>(reader: &mut R) -> std::io::Result<Self> {
+        let loc = reader.seek(SeekFrom::Current(0))?;
+        Self::read_tlist_metadata_at(reader, loc)
     }
 }

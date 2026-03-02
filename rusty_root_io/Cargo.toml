@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+binrw = "0.15.0"
 byteorder = "1.5.0"
 flate2 = "1.1.2"
 lz4_flex = "0.11.5"

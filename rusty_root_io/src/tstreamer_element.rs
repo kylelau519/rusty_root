@@ -81,6 +81,7 @@ pub enum TStreamerType {
     TStreamerSTLString,
 }
 
+#[derive(Debug)]
 pub struct TStreamerElement {
     pub byte_count: u32,
     pub class_info: ClassInfo,

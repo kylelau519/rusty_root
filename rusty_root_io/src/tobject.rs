@@ -60,7 +60,7 @@ impl TObject {
         })
     }
 
-    pub fn read_tobject<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<Self> {
+    pub fn read_tobject<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
         let offset = reader.seek(SeekFrom::Current(0))?;
         Self::read_tobject_at(reader, offset)
     }

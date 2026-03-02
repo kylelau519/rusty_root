@@ -71,37 +71,18 @@ mod tests {
         // Decompress the data
         let decompressed_data = decompress(&data, 101).expect("Failed to decompress data");
         assert_eq!(decompressed_data.len(), obj_len as usize);
-        dbg!(debug_in_ascii(&decompressed_data));
-        // Implement Read and Seek for the decompressed data using Cursor
-        use std::io::Cursor;
-        // let mut decompressed_reader = BufReader::new(Cursor::new(decompressed_data));
-
-        let mut reader = Cursor::new(decompressed_data.clone());
-
-        // Now you can use your existing helper functions
-        dbg!(obj_len);
-        let byte_count = reader
-            .read_u32::<byteorder::BigEndian>()
-            .expect("Failed to read byte count")
-            & K_BYTECOUNTMASK;
-        let version = reader
-            .read_u16::<byteorder::BigEndian>()
-            .expect("Failed to read version");
-        let tobject = crate::tobject::TObject::read_tobject(&mut reader)
-            .expect("Failed to read TObject from decompressed data");
-
-        // Check that tobject is 12 bytes
-        use std::mem::size_of_val;
-        assert_eq!(size_of_val(&tobject), 12, "TObject should be 12 bytes");
-
-        dbg!(byte_count, version, tobject);
-        let l_name_byte = reader
-            .read_u8()
-            .expect("Failed to read l_name_byte from decompressed data");
-        dbg!(l_name_byte);
-        let n_objects = reader
-            .read_u32::<byteorder::BigEndian>()
-            .expect("Failed to read n_objects from decompressed data");
-        dbg!(n_objects);
+        // Save the join key and decompressed info to a single bin file,
+        // let mut key_data = vec![0u8; key_len];
+        // reader
+        //     .seek(SeekFrom::Start(streamer_info_offset))
+        //     .expect("Failed to seek back to TKey");
+        // reader
+        //     .read_exact(&mut key_data)
+        //     .expect("Failed to read TKey data");
+        // std::fs::write(
+        //     "testfiles/streamer_info.bin",
+        //     [key_data, decompressed_data.to_vec()].concat(),
+        // )
+        // .expect("Failed to write streamer info to file");
     }
 }
