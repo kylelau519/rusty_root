@@ -64,9 +64,9 @@ impl FirstRecordData {
         offset: u64,
     ) -> io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
-        let l_name = utils::read_u1(reader)?;
+        let l_name = reader.read_u8()?;
         let name = utils::read_string(reader, l_name as usize)?;
-        let l_title = utils::read_u1(reader)?;
+        let l_title = reader.read_u8()?;
         let title = utils::read_string(reader, l_title as usize)?;
         let version = reader.read_u16::<BigEndian>()?;
         let datime_c = reader.read_u32::<BigEndian>()?;

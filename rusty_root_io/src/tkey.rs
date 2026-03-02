@@ -1,13 +1,9 @@
+use crate::utils::{self, binrw_read_string, ReaderDynWidth};
+use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fmt;
 use std::io;
 use std::io::{Read, Seek, SeekFrom};
-use std::ops::Deref;
-use std::sync::Arc;
-
-use crate::compression::HasCompressedData;
-use crate::utils;
-use crate::utils::ReaderDynWidth;
 
 /*
  * https://root.cern/doc/v638/tdirectory.html
@@ -76,11 +72,11 @@ impl TKey {
         let reader_dyn_width = ReaderDynWidth::from_tkey_version(version);
         let seek_key = reader_dyn_width.read_ptr(reader)?;
         let seek_p_dir = reader_dyn_width.read_ptr(reader)?;
-        let l_class_name = utils::read_u1(reader)?;
+        let l_class_name = reader.read_u8()?;
         let class_name = utils::read_string(reader, l_class_name as usize)?;
-        let l_name = utils::read_u1(reader)?;
+        let l_name = reader.read_u8()?;
         let name = utils::read_string(reader, l_name as usize)?;
-        let l_title = utils::read_u1(reader)?;
+        let l_title = reader.read_u8()?;
         let title = utils::read_string(reader, l_title as usize)?;
         let key = TKey {
             n_bytes,
@@ -127,114 +123,62 @@ impl fmt::Debug for TKey {
     }
 }
 
-#[derive(Default)]
-pub struct TKeyHeader {
-    pub base_key: TKey,
-    pub compressed_data: Vec<u8>,
-    pub decompressed_data: Option<Arc<[u8]>>,
-}
+impl BinRead for TKey {
+    type Args<'a> = ();
 
-impl fmt::Debug for TKeyHeader {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TKeyHeader")
-            .field("n_bytes", &self.n_bytes)
-            .field("version", &self.version)
-            .field("obj_len", &self.obj_len)
-            .field("datime", &self.datime)
-            .field("key_len", &self.key_len)
-            .field("cycle", &self.cycle)
-            .field("seek_key", &self.seek_key)
-            .field("seek_p_dir", &self.seek_p_dir)
-            .field("l_class_name", &self.l_class_name)
-            .field("class_name", &self.class_name)
-            .field("l_name", &self.l_name)
-            .field("name", &self.name)
-            .field("l_title", &self.l_title)
-            .field("title", &self.title)
-            .field(
-                "compressed_data",
-                &self
-                    .compressed_data
-                    .get(..10)
-                    .unwrap_or(&self.compressed_data),
-            )
-            .field(
-                "decompressed_data",
-                &self
-                    .decompressed_data
-                    .as_ref()
-                    .map(|v| v.get(..10).unwrap_or(&v[..])),
-            )
-            .finish()
-    }
-}
-impl TKeyHeader {
-    pub fn new() -> Self {
-        TKeyHeader {
-            base_key: TKey::new(),
-            compressed_data: Vec::new(),
-            decompressed_data: None,
-        }
-    }
-
-    pub fn read_tkey_at<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
-        let key = TKey::read_tkey_at(reader, offset)?;
-        let keyheader = TKeyHeader {
-            base_key: key,
-            compressed_data: Vec::new(),
-            decompressed_data: None,
-        };
-        Ok(keyheader)
-    }
-
-    pub fn read_tkey_at_save_payload<R: Read + Seek>(
+    fn read_options<R: Read + Seek>(
         reader: &mut R,
-        offset: u64,
-    ) -> io::Result<Self> {
-        let mut keyheader = Self::read_tkey_at(reader, offset)?;
-        keyheader.compressed_data = keyheader.parse_payload(reader)?;
-        Ok(keyheader)
-    }
+        endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> BinResult<Self> {
+        // 1. Read the fixed-width fields first
+        let n_bytes: u32 = reader.read_type(endian)?;
+        let version: u16 = reader.read_type(endian)?;
+        let obj_len: u32 = reader.read_type(endian)?;
+        let datime: u32 = reader.read_type(endian)?;
+        let key_len: u16 = reader.read_type(endian)?;
+        let cycle: u16 = reader.read_type(endian)?;
 
-    fn parse_payload<R: Read + Seek>(&self, reader: &mut R) -> io::Result<Vec<u8>> {
-        let payload_offset = self.seek_key + self.key_len as u64;
-        reader.seek(SeekFrom::Start(payload_offset))?;
-        let payload_buf = self.n_bytes - self.key_len as u32;
-        let mut data_buf = vec![0u8; payload_buf as usize];
-        reader.read_exact(&mut data_buf)?;
-        Ok(data_buf)
+        // 2. THE FIX: Handle variable width pointers
+        // ROOT Logic: if version > 1000, pointers are 64-bit
+        let (seek_key, seek_p_dir) = if version > 1000 {
+            let s_key: u64 = reader.read_type(endian)?;
+            let s_pdir: u64 = reader.read_type(endian)?;
+            (s_key, s_pdir)
+        } else {
+            let s_key: u32 = reader.read_type(endian)?;
+            let s_pdir: u32 = reader.read_type(endian)?;
+            (s_key as u64, s_pdir as u64) // Cast to u64 for struct parity
+        };
+
+        // 3. Read Strings using our parse_with logic or helper
+        let l_class_name: u8 = reader.read_type(endian)?;
+        let class_name = binrw_read_string(reader, endian, (l_class_name,))?;
+
+        let l_name: u8 = reader.read_u8()?;
+        let name = binrw_read_string(reader, endian, (l_name,))?;
+
+        let l_title: u8 = reader.read_u8()?;
+        let title = binrw_read_string(reader, endian, (l_title,))?;
+
+        Ok(TKey {
+            n_bytes,
+            version,
+            obj_len,
+            datime,
+            key_len,
+            cycle,
+            seek_key,
+            seek_p_dir,
+            l_class_name,
+            class_name,
+            l_name,
+            name,
+            l_title,
+            title,
+        })
     }
 }
-impl Deref for TKeyHeader {
-    type Target = TKey;
-
-    fn deref(&self) -> &Self::Target {
-        &self.base_key
-    }
-}
-
-impl HasCompressedData for TKeyHeader {
-    fn get_compressed_data(&self) -> &[u8] {
-        &self.compressed_data
-    }
-
-    fn get_compressed_len(&self) -> usize {
-        self.compressed_data.len()
-    }
-
-    fn get_uncompressed_len(&self) -> usize {
-        self.obj_len as usize
-    }
-
-    fn decompressed_data(&self) -> Option<Arc<[u8]>> {
-        self.decompressed_data.clone()
-    }
-
-    fn decompressed_data_mut(&mut self) -> &mut Option<Arc<[u8]>> {
-        &mut self.decompressed_data
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,5 +188,26 @@ mod tests {
         let mut key = TKey::new();
         key.datime = 2054579214;
         assert_eq!(decode_datime(key.datime), "2025-09-27 06:16:14");
+    }
+
+    use binrw::BinRead;
+    use std::fs::File;
+    use std::io::SeekFrom;
+
+    #[test]
+    fn test_read_key_with_binrw() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let key_list_offset = 80365942;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = std::io::BufReader::new(file);
+        reader
+            .seek(SeekFrom::Start(key_list_offset))
+            .expect("Failed to seek to key list offset");
+
+        let key = TKey::read_be(&mut reader).expect("Failed to read TKey with BinRead");
+        dbg!(&key);
+        assert_eq!(key.class_name, "TFile");
+        assert_eq!(key.name, "user.holau.700590.Sh_2212_llvvjj_ss.e8433_s3681_r13167_r13146_p6697.46550259._000001.output.root");
     }
 }

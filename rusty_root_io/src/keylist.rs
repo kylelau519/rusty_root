@@ -1,7 +1,7 @@
 use crate::tkey::TKey;
+use binrw::binread;
 use byteorder::ReadBytesExt;
-use std::fs::File;
-use std::io::{BufReader, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 
 // https://root.cern/doc/v638/keyslist.html
 /*
@@ -28,15 +28,18 @@ use std::io::{BufReader, Seek, SeekFrom};
                       |  the entire TKey portion of each record is replicated.
                       |  Note that SeekKey locates the record.
 */
+#[binread]
+#[br(big)]
 #[derive(Debug, Default)]
 pub struct KeyList {
     key: TKey,
     n_keys: u32,
+    #[br(count = n_keys)]
     keys: Vec<TKey>,
 }
 
 impl KeyList {
-    pub fn read_keylist_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
+    pub fn read_keylist_at<R: Read + Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
         let key = TKey::read_tkey_at(reader, offset)?;
         let n_keys = reader.read_u32::<byteorder::BigEndian>()?;
         let mut keys = Vec::with_capacity(n_keys as usize);
@@ -55,6 +58,8 @@ impl KeyList {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::File;
+    use std::io::BufReader;
     #[test]
     fn test_read_keylist() {
         let path =
@@ -64,6 +69,20 @@ mod tests {
         let mut reader = BufReader::new(file);
         let key_list = KeyList::read_keylist_at(&mut reader, key_list_offset)
             .expect("Failed to read KeyList at offset");
+        dbg!(&key_list);
+    }
+    use binrw::BinRead;
+    #[test]
+    fn test_read_keylist_binrw() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let key_list_offset = 80365942;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+        reader
+            .seek(SeekFrom::Start(key_list_offset))
+            .expect("Failed to seek to key list offset");
+        let key_list = KeyList::read_be(&mut reader).expect("Failed to read KeyList with BinRead");
         dbg!(&key_list);
     }
 }

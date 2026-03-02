@@ -1,6 +1,8 @@
+use crate::constant::{K_MAP_OFFSET, K_NEWCLASSTAG, K_NEW_CLASSBIT};
+use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 
 pub enum ReaderDynWidth {
     Off32,
@@ -69,8 +71,64 @@ impl ClassInfo {
             let class_name = String::from_utf8_lossy(&name).into_owned();
             Ok(ClassInfo::NewClass(class_name))
         } else {
-            let offset = if tag & crate::constant::K_NEW_CLASSBIT != 0 {
-                (tag & !crate::constant::K_NEW_CLASSBIT) - crate::constant::K_MAP_OFFSET
+            let offset = if tag & K_NEW_CLASSBIT != 0 {
+                (tag & !K_NEW_CLASSBIT) - K_MAP_OFFSET
+            } else {
+                tag
+            };
+            Ok(ClassInfo::Offset(offset))
+        }
+    }
+
+    pub fn get_class_name<R: Read + Seek>(&self, reader: &mut R) -> io::Result<String> {
+        match self {
+            ClassInfo::NewClass(name) => Ok(name.clone()),
+            ClassInfo::Offset(offset) => {
+                let current_pos = reader.seek(SeekFrom::Current(0))?;
+                reader.seek(SeekFrom::Start(*offset as u64))?;
+                let mut name_bytes = Vec::new();
+                let mut byte = [0u8; 1];
+                loop {
+                    reader.read_exact(&mut byte)?;
+                    if byte[0] == 0 {
+                        break;
+                    }
+                    name_bytes.push(byte[0]);
+                }
+                reader.seek(SeekFrom::Start(current_pos))?;
+                Ok(String::from_utf8_lossy(&name_bytes).into_owned())
+            }
+        }
+    }
+}
+
+impl BinRead for ClassInfo {
+    type Args<'a> = ();
+
+    fn read_options<R: Read + Seek>(
+        reader: &mut R,
+        endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> BinResult<Self> {
+        // 1. Read the 32-bit tag
+        let tag: u32 = reader.read_type(endian)?;
+
+        if tag == K_NEWCLASSTAG {
+            // 2. Handle NewClass: Read null-terminated string
+            let mut name_bytes = Vec::new();
+            loop {
+                let byte: u8 = reader.read_type(endian)?;
+                if byte == 0 {
+                    break;
+                }
+                name_bytes.push(byte);
+            }
+            let name = String::from_utf8_lossy(&name_bytes).into_owned();
+            Ok(ClassInfo::NewClass(name))
+        } else {
+            // 3. Handle Offset: Perform bitwise logic
+            let offset = if (tag & K_NEW_CLASSBIT) != 0 {
+                (tag & !K_NEW_CLASSBIT) - K_MAP_OFFSET
             } else {
                 tag
             };
@@ -99,12 +157,6 @@ pub fn read_string<R: Read>(reader: &mut R, length: usize) -> io::Result<String>
     Ok(s)
 }
 
-pub fn read_u1<R: Read>(reader: &mut R) -> io::Result<u8> {
-    let mut buf = [0u8; 1];
-    reader.read_exact(&mut buf)?;
-    Ok(buf[0])
-}
-
 pub fn debug_in_ascii(bytes: &[u8]) -> String {
     bytes
         .iter()
@@ -116,4 +168,27 @@ pub fn debug_in_ascii(bytes: &[u8]) -> String {
             }
         })
         .collect::<String>()
+}
+
+pub fn binrw_read_string<R: Read + Seek>(
+    reader: &mut R,
+    endian: Endian,
+    args: (u8,), // This receives the 'l_name' we just read
+) -> BinResult<String> {
+    let (l_name,) = args;
+
+    let length = if l_name == 255 {
+        // Overflow case: read the next 4 bytes as the true length
+        reader.read_type::<u32>(endian)?
+    } else {
+        l_name as u32
+    };
+
+    if length == 0 {
+        return Ok(String::new());
+    }
+
+    let mut buf = vec![0u8; length as usize];
+    reader.read_exact(&mut buf)?;
+    Ok(String::from_utf8_lossy(&buf).into_owned())
 }

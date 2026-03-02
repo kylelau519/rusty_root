@@ -15,10 +15,7 @@ pub struct TList<T> {
     pub objects: Vec<T>,
 }
 
-impl<T> TList<T>
-where
-    T: BinRead,
-{
+impl<T> TList<T> {
     pub fn read_tlist_at<R: Read + Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
         let byte_count = reader.read_u32::<byteorder::BigEndian>()?;

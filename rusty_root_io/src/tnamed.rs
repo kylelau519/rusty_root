@@ -1,6 +1,7 @@
 use crate::constant::K_BYTECOUNTMASK;
 use crate::tobject::TObject;
-use crate::utils;
+use crate::utils::{self, binrw_read_string};
+use binrw::{binread, BinRead};
 use byteorder::ReadBytesExt;
 use std::io;
 use std::io::{Read, Seek, SeekFrom};
@@ -20,15 +21,19 @@ use std::io::{Read, Seek, SeekFrom};
                       |  (Class title may be zero length)
  -End TNamed object
 */
-
+#[binread]
+#[br(big)]
 #[derive(Debug, Default)]
 pub struct TNamed {
+    #[br(map = |x: u32| x & K_BYTECOUNTMASK)]
     pub byte_count: u32,
     pub version: u16,
     pub tobject: TObject,
     pub l_name: u8,
+    #[br(parse_with = binrw_read_string, args(l_name))]
     pub name: String,
     pub l_title: u8,
+    #[br(parse_with = binrw_read_string, args(l_title))]
     pub title: String,
 }
 
@@ -38,9 +43,9 @@ impl TNamed {
         let byte_count = reader.read_u32::<byteorder::BigEndian>()? & K_BYTECOUNTMASK;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
         let tobject = TObject::read_tobject(reader)?;
-        let l_name = utils::read_u1(reader)?;
+        let l_name = reader.read_u8()?;
         let name = utils::read_string(reader, l_name as usize)?;
-        let l_title = utils::read_u1(reader)?;
+        let l_title = reader.read_u8()?;
         let title = utils::read_string(reader, l_title as usize)?;
         Ok(TNamed {
             byte_count,
