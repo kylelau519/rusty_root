@@ -1,8 +1,7 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fmt;
-use std::fs::File;
 use std::io;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 use std::ops::Deref;
 use std::sync::Arc;
 

@@ -1,9 +1,8 @@
 use crate::tobject::TObject;
 use crate::utils;
-use byteorder::{BigEndian, ReadBytesExt};
-use std::fs::File;
+use byteorder::ReadBytesExt;
 use std::io;
-use std::io::{BufReader, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 
 /*
 * -Begin TNamed object (Base class of TStreamerInfo)
@@ -33,7 +32,7 @@ pub struct TNamed {
 }
 
 impl TNamed {
-    pub fn read_tnamed_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
+    pub fn read_tnamed_at<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         reader.seek(std::io::SeekFrom::Start(offset))?;
         let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
@@ -53,7 +52,7 @@ impl TNamed {
         })
     }
 
-    pub fn read_tnamed<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<Self> {
+    pub fn read_tnamed<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
         let offset = reader.seek(SeekFrom::Current(0))?;
         Self::read_tnamed_at(reader, offset)
     }

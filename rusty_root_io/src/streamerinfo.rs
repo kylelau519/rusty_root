@@ -31,6 +31,8 @@ impl StreamerInfo {
 mod tests {
     use super::*;
     use crate::tkey::TKey;
+    use crate::utils::debug_in_ascii;
+    use byteorder::ReadBytesExt;
     use std::fs::File;
     #[test]
     fn test_streamer_info() {
@@ -46,7 +48,6 @@ mod tests {
     }
 
     use crate::compression::decompress;
-    use byteorder::ReadBytesExt;
     use std::io::{Read, Seek, SeekFrom};
     #[test]
     fn test_decode_streamer_info() {
@@ -70,11 +71,37 @@ mod tests {
         // Decompress the data
         let decompressed_data = decompress(&data, 101).expect("Failed to decompress data");
         assert_eq!(decompressed_data.len(), obj_len as usize);
-        let mut decompressed_reader = BufReader::new(&decompressed_data[..]);
+        dbg!(debug_in_ascii(&decompressed_data));
+        // Implement Read and Seek for the decompressed data using Cursor
+        use std::io::Cursor;
+        // let mut decompressed_reader = BufReader::new(Cursor::new(decompressed_data));
 
-        // let tlist: TList<()> = TList::read_tlist_metadata_at(&mut decompressed_reader, 0)
-        //     .expect("Failed to read the tlist");
+        let mut reader = Cursor::new(decompressed_data.clone());
 
-        // dbg!(&tlist);
+        // Now you can use your existing helper functions
+        dbg!(obj_len);
+        let byte_count = reader
+            .read_u32::<byteorder::BigEndian>()
+            .expect("Failed to read byte count")
+            & K_BYTECOUNTMASK;
+        let version = reader
+            .read_u16::<byteorder::BigEndian>()
+            .expect("Failed to read version");
+        let tobject = crate::tobject::TObject::read_tobject(&mut reader)
+            .expect("Failed to read TObject from decompressed data");
+
+        // Check that tobject is 12 bytes
+        use std::mem::size_of_val;
+        assert_eq!(size_of_val(&tobject), 12, "TObject should be 12 bytes");
+
+        dbg!(byte_count, version, tobject);
+        let l_name_byte = reader
+            .read_u8()
+            .expect("Failed to read l_name_byte from decompressed data");
+        dbg!(l_name_byte);
+        let n_objects = reader
+            .read_u32::<byteorder::BigEndian>()
+            .expect("Failed to read n_objects from decompressed data");
+        dbg!(n_objects);
     }
 }

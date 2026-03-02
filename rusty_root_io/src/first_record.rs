@@ -2,9 +2,8 @@ use crate::tkey::TKey;
 use crate::utils;
 use crate::utils::ReaderDynWidth;
 use byteorder::{BigEndian, ReadBytesExt};
-use std::fs::File;
 use std::io;
-use std::io::{BufReader, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Default, Debug)]
 pub struct FirstRecordDict {
@@ -13,7 +12,7 @@ pub struct FirstRecordDict {
 }
 
 impl FirstRecordDict {
-    pub fn read_first_record_dict<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
+    pub fn read_first_record_dict<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
         let key = TKey::read_tkey_at(reader, offset)?;
         let data = FirstRecordData::read_header_dict_data(reader)?;
         Ok(Self { key, data })
@@ -55,12 +54,15 @@ pub struct FirstRecordData {
 }
 
 impl FirstRecordData {
-    pub fn read_header_dict_data<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<Self> {
+    pub fn read_header_dict_data<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
         let loc = reader.seek(SeekFrom::Current(0))?;
         Self::read_header_dict_data_at(reader, loc)
     }
 
-    pub fn read_header_dict_data_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
+    pub fn read_header_dict_data_at<R: Read + Seek>(
+        reader: &mut R,
+        offset: u64,
+    ) -> io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
         let l_name = utils::read_u1(reader)?;
         let name = utils::read_string(reader, l_name as usize)?;
@@ -98,6 +100,8 @@ impl FirstRecordData {
 mod tests {
     use super::*;
     use crate::utils::decode_datime;
+    use std::fs::File;
+    use std::io::BufReader;
     #[test]
     fn test_read_first_data_record_key() {
         let path =

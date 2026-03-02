@@ -1,7 +1,8 @@
 use byteorder::{BigEndian, ReadBytesExt};
-use std::fs::File;
 use std::io;
-use std::io::{BufReader, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
+
+use crate::constant::K_IS_REFERENCED;
 /*
 * TObject
 * https://root.cern/doc/v638/tobject.html
@@ -40,12 +41,17 @@ pub struct TObject {
 }
 
 impl TObject {
-    pub fn read_tobject_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
-        reader.seek(io::SeekFrom::Start(offset))?;
+    pub fn read_tobject_at<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
+        reader.seek(SeekFrom::Start(offset))?;
         let version = reader.read_u16::<BigEndian>()?;
         let f_uniqueid = reader.read_u32::<BigEndian>()?;
         let f_bits = reader.read_u32::<BigEndian>()?;
-        let pidf = reader.read_u16::<BigEndian>()?;
+
+        let pidf = if (f_bits & K_IS_REFERENCED) != 0 {
+            reader.read_u16::<BigEndian>()?
+        } else {
+            0
+        };
         Ok(TObject {
             version,
             f_uniqueid,

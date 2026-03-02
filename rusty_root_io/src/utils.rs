@@ -1,7 +1,6 @@
 use byteorder::{BigEndian, ReadBytesExt};
-use std::fs::File;
 use std::io;
-use std::io::{BufReader, Read, Seek};
+use std::io::Read;
 
 pub enum ReaderDynWidth {
     Off32,
@@ -104,4 +103,17 @@ pub fn read_u1<R: Read>(reader: &mut R) -> io::Result<u8> {
     let mut buf = [0u8; 1];
     reader.read_exact(&mut buf)?;
     Ok(buf[0])
+}
+
+pub fn debug_in_ascii(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|&b| {
+            if b.is_ascii_graphic() || b == b' ' {
+                (b as char).to_string()
+            } else {
+                format!("[{:02x}]", b)
+            }
+        })
+        .collect::<String>()
 }

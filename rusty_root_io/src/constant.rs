@@ -3,4 +3,6 @@ pub const K_NEW_CLASSBIT: u32 = 0x8000_0000; // bit31 (class/ref tag bit)
 pub const K_BYTECOUNTMASK: u32 = 0x3FFF_FFFF; // low 30 bits
 pub const K_NEWCLASSTAG: u32 = 0xFFFF_FFFF; // -1 new-class tag
 pub const K_NULLTAG: u32 = 0x0000_0000; // null
-pub const K_MAP_OFFSET: u32 = 2;
+                                        // pub const K_MAP_OFFSET: u32 = 2;
+pub const K_MAP_OFFSET: u32 = 0x0000_0002; // offset for map in streamer info
+pub const K_IS_REFERENCED: u32 = 0x0000_0010; // bit24 in TKey::fBits, indicates the object is referenced by other objects

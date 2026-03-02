@@ -1,8 +1,7 @@
 use crate::tobject::TObject;
 use crate::utils;
 use byteorder::ReadBytesExt;
-use std::fs::File;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Default, Debug)]
 pub struct TList<T> {
@@ -16,7 +15,10 @@ pub struct TList<T> {
 }
 
 impl TList<()> {
-    pub fn read_tlist_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
+    pub fn read_tlist_at<R: std::io::Read + std::io::Seek>(
+        reader: &mut R,
+        offset: u64,
+    ) -> std::io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
         let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
@@ -34,17 +36,18 @@ impl TList<()> {
             objects: Vec::new(), // Placeholder, as we don't know the type T or how to read it yet
         })
     }
-    pub fn read_tlist<R: std::io::Read + std::io::Seek>(reader: &mut R) -> std::io::Result<Self> {
+    pub fn read_tlist<R: Read + Seek>(reader: &mut R) -> std::io::Result<Self> {
         let loc = reader.seek(SeekFrom::Current(0))?;
         Self::read_tlist_at(reader, loc)
     }
 
-    pub fn read_tlist_metadata_at<R: std::io::Read + std::io::Seek>(
+    pub fn read_tlist_metadata_at<R: Read + Seek>(
         reader: &mut R,
         offset: u64,
     ) -> std::io::Result<Self> {
         reader.seek(SeekFrom::Start(offset))?;
-        let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
+        let byte_count =
+            reader.read_u32::<byteorder::BigEndian>()? & crate::constant::K_BYTECOUNTMASK;
         let version = reader.read_u16::<byteorder::BigEndian>()?;
         let tobject = TObject::read_tobject(reader)?;
         let f_name_byte = reader.read_u8()?;
