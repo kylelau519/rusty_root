@@ -1,11 +1,7 @@
-use crate::compression::decompress;
-use crate::constant::{K_BYTECOUNTMASK, K_NEWCLASSTAG};
 use crate::tkey::TKey;
 use crate::tlist::TList;
 use crate::tstreamerinfo::TStreamerInfo;
-use std::fs::File;
-use std::io;
-use std::io::{BufReader, Seek, SeekFrom};
+use binrw::binread;
 
 // https://root.cern/doc/v638/streamerinfo.html
 #[derive(Default)]
@@ -14,26 +10,12 @@ pub struct StreamerInfo {
     pub tlist: TList<TStreamerInfo>,
 }
 
-impl StreamerInfo {
-    // pub fn read_streamer_info_at<R: std::io::Read + std::io::Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
-    //     reader.seek(SeekFrom::Start(offset))?;
-    //     let streamer_info_header = TKey::read_tkey(reader)?;
-    //     let payload_len =
-    //         (streamer_info_header.n_bytes - streamer_info_header.key_len as u32) as usize;
-    //     let mut payload = vec![0u8; payload_len];
-    //     let mut data = decompress(&payload, 100);
-    //     assert_eq!(data.len(), streamer_info_header.obj_len as usize);
-
-    // }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tkey::TKey;
-    use crate::utils::debug_in_ascii;
-    use byteorder::ReadBytesExt;
     use std::fs::File;
+    use std::io::{BufReader, Read, Seek, SeekFrom};
     #[test]
     fn test_streamer_info() {
         let path =
@@ -48,7 +30,6 @@ mod tests {
     }
 
     use crate::compression::decompress;
-    use std::io::{Read, Seek, SeekFrom};
     #[test]
     fn test_decode_streamer_info() {
         let path =
@@ -71,18 +52,55 @@ mod tests {
         // Decompress the data
         let decompressed_data = decompress(&data, 101).expect("Failed to decompress data");
         assert_eq!(decompressed_data.len(), obj_len as usize);
-        // Save the join key and decompressed info to a single bin file,
-        // let mut key_data = vec![0u8; key_len];
-        // reader
-        //     .seek(SeekFrom::Start(streamer_info_offset))
-        //     .expect("Failed to seek back to TKey");
-        // reader
-        //     .read_exact(&mut key_data)
-        //     .expect("Failed to read TKey data");
-        // std::fs::write(
-        //     "testfiles/streamer_info.bin",
-        //     [key_data, decompressed_data.to_vec()].concat(),
-        // )
-        // .expect("Failed to write streamer info to file");
+    }
+
+    use crate::tlist::TList;
+    use binrw::BinRead;
+    #[test]
+    fn test_read_all_streamer_info() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let streamer_info_offset = 80357582;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+
+        // Read the TKey at the streamer info offset
+        let key = TKey::read_tkey_at(&mut reader, streamer_info_offset)
+            .expect("Failed to read TKey at offset");
+        assert_eq!(key.title, "Doubly linked list");
+
+        let payload_len = (key.n_bytes - key.key_len as u32) as usize;
+
+        let key_data = {
+            let mut buf = vec![0u8; key.key_len as usize];
+            reader
+                .seek(SeekFrom::Start(streamer_info_offset))
+                .expect("Failed to seek to TKey");
+            reader
+                .read_exact(&mut buf)
+                .expect("Failed to read TKey data");
+            buf
+        };
+        let compressed_data = {
+            let mut buf = vec![0u8; payload_len];
+            reader
+                .seek(SeekFrom::Start(streamer_info_offset + key.key_len as u64))
+                .expect("Failed to seek to compressed data");
+            reader
+                .read_exact(&mut buf)
+                .expect("Failed to read compressed data");
+            buf
+        };
+        let decompressed_data =
+            decompress(&compressed_data, 101).expect("Failed to decompress data");
+
+        let mut combined_data = key_data;
+        combined_data.extend_from_slice(&decompressed_data);
+        let mut cursor = std::io::Cursor::new(combined_data);
+        let tkey: TKey =
+            TKey::read_be(&mut cursor).expect("Failed to read TKey from combined data");
+        let tlist: TList<TStreamerInfo> =
+            TList::read_be(&mut cursor).expect("Failed to read TList from decompressed data");
+        dbg!(&tlist);
     }
 }

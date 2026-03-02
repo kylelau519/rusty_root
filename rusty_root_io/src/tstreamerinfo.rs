@@ -98,6 +98,7 @@ mod tests {
         let tstreamer_info: TStreamerInfo =
             TStreamerInfo::read_be(&mut reader).expect("Failed to read TStreamerInfo with BinRead");
         dbg!(&tstreamer_info);
+        assert_eq!(tstreamer_info.f_checksum, 3753331260);
         // let mut tstreamers_info: Vec<TStreamerInfo> = Vec::new();
     }
 }

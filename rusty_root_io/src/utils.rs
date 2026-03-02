@@ -85,7 +85,7 @@ impl ClassInfo {
             ClassInfo::NewClass(name) => Ok(name.clone()),
             ClassInfo::Offset(offset) => {
                 let current_pos = reader.seek(SeekFrom::Current(0))?;
-                reader.seek(SeekFrom::Start(*offset as u64))?;
+                reader.seek(SeekFrom::Start(*offset as u64 + 4))?; // 64 is key length, 4 is the tag we just read
                 let mut name_bytes = Vec::new();
                 let mut byte = [0u8; 1];
                 loop {
