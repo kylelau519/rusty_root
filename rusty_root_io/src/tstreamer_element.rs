@@ -238,7 +238,7 @@ impl BinRead for TStreamerElement {
         let remaining_bytes = reader.read_type::<u32>(endian)? & K_BYTECOUNTMASK;
         let version = reader.read_type::<u16>(endian)?;
         let tstreamer_element_base = TStreamerElementBase::read_be(reader)?;
-        let streamer_type_string = class_info.get_class_name(reader)?;
+        let streamer_type_string = class_info.get_class_name();
         let tstreamer_type = TStreamerType::read_streamer_type(reader, &streamer_type_string)?;
         Ok(Self {
             byte_count,

@@ -23,7 +23,7 @@ where
     #[br(parse_with = binrw_read_string, args(f_name_byte))]
     pub f_name: String,
     pub n_objects: u32,
-    #[br(count = n_objects-1)]
+    #[br(count = n_objects)]
     pub objects: Vec<TListElement<T>>,
 }
 

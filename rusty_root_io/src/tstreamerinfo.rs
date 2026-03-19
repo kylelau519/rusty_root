@@ -3,18 +3,14 @@ use crate::tnamed::TNamed;
 use crate::tobjarray::TObjArray;
 use crate::tstreamer_element::TStreamerElement;
 use crate::utils::ClassInfo;
-use binrw::binread;
+use binrw::{binread, BinRead, BinReaderExt, BinResult, Endian};
 use byteorder::ReadBytesExt;
 use std::io::{Read, Seek, SeekFrom};
 
-#[binread]
-#[br(big)]
 #[derive(Default, Debug)]
 pub struct TStreamerInfo {
-    #[br(map = |x: u32| x & K_BYTECOUNTMASK)]
     pub byte_count: u32,
     pub class_info: ClassInfo,
-    #[br(map = |x: u32| x & K_BYTECOUNTMASK)]
     pub remaining_bytes: u32,
     pub version: u16,
     pub tnamed: TNamed,
@@ -23,30 +19,56 @@ pub struct TStreamerInfo {
     pub tobjarray: TObjArray<TStreamerElement>,
 }
 
+impl BinRead for TStreamerInfo {
+    type Args<'a> = ();
+
+    fn read_options<R: Read + Seek>(
+        reader: &mut R,
+        endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> BinResult<Self> {
+        let start_pos = reader.stream_position()?;
+        let byte_count = reader.read_type::<u32>(endian)? & K_BYTECOUNTMASK;
+        let class_info = ClassInfo::read_options(reader, endian, ())?;
+
+        if class_info.get_class_name() == "TStreamerInfo" {
+            let remaining_bytes = reader.read_type::<u32>(endian)? & K_BYTECOUNTMASK;
+            let version = reader.read_type::<u16>(endian)?;
+            let tnamed = TNamed::read_options(reader, endian, ())?;
+            let f_checksum = reader.read_type::<u32>(endian)?;
+            let f_class_version = reader.read_type::<u32>(endian)?;
+            let tobjarray = TObjArray::<TStreamerElement>::read_options(reader, endian, ())?;
+            Ok(Self {
+                byte_count,
+                class_info,
+                remaining_bytes,
+                version,
+                tnamed,
+                f_checksum,
+                f_class_version,
+                tobjarray,
+            })
+        } else {
+            // Skip the rest of the object
+            reader.seek(SeekFrom::Start(start_pos + byte_count as u64 + 4))?;
+            Ok(Self {
+                byte_count,
+                class_info,
+                ..Default::default()
+            })
+        }
+    }
+}
+
 impl TStreamerInfo {
     pub fn read_tstreamer_info_at<R: Read + Seek>(
         reader: &mut R,
         offset: u64,
     ) -> std::io::Result<Self> {
         reader.seek(std::io::SeekFrom::Start(offset))?;
-        let byte_count = reader.read_u32::<byteorder::BigEndian>()? & K_BYTECOUNTMASK;
-        let class_info = ClassInfo::read_class_info(reader)?;
-        let remaining_bytes = reader.read_u32::<byteorder::BigEndian>()? & K_BYTECOUNTMASK;
-        let version = reader.read_u16::<byteorder::BigEndian>()?;
-        let tnamed = TNamed::read_tnamed(reader)?;
-        let f_checksum = reader.read_u32::<byteorder::BigEndian>()?;
-        let f_class_version = reader.read_u32::<byteorder::BigEndian>()?;
-        let tobjarray = TObjArray::<TStreamerElement>::read_tobjarray(reader)?;
-        Ok(Self {
-            byte_count,
-            class_info,
-            remaining_bytes,
-            version,
-            tnamed,
-            f_checksum,
-            f_class_version,
-            tobjarray,
-        })
+        // Use the BinRead implementation for consistency
+        Self::read_be(reader)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
     }
 
     pub fn read_tstreamer_info<R: Read + Seek>(reader: &mut R) -> std::io::Result<Self> {

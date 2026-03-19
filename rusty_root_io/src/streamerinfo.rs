@@ -1,13 +1,12 @@
 use crate::tkey::TKey;
 use crate::tlist::TList;
 use crate::tstreamerinfo::TStreamerInfo;
-use binrw::binread;
 
 // https://root.cern/doc/v638/streamerinfo.html
 #[derive(Default)]
 pub struct StreamerInfo {
     pub streamer_info_header: TKey,
-    pub tlist: TList<TStreamerInfo>,
+    pub tlist: TList<TStreamerInfo>, // the last element of StreamerInfo is not TStreamerInfo but some object called "ListOfRules".. not written anywhere
 }
 
 #[cfg(test)]
@@ -101,6 +100,6 @@ mod tests {
             TKey::read_be(&mut cursor).expect("Failed to read TKey from combined data");
         let tlist: TList<TStreamerInfo> =
             TList::read_be(&mut cursor).expect("Failed to read TList from decompressed data");
-        dbg!(&tlist);
+        dbg!(&tlist.objects[10]);
     }
 }

@@ -46,17 +46,20 @@ impl ReaderDynWidth {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClassInfo {
     NewClass(String),
-    Offset(u32),
+    Offset { offset: u32, class_name: String },
 }
 
 impl Default for ClassInfo {
     fn default() -> Self {
-        ClassInfo::Offset(0)
+        ClassInfo::Offset {
+            offset: 0,
+            class_name: String::new(),
+        }
     }
 }
 
 impl ClassInfo {
-    pub fn read_class_info<R: Read>(reader: &mut R) -> io::Result<Self> {
+    pub fn read_class_info<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
         let tag = reader.read_u32::<BigEndian>()?;
         if tag == crate::constant::K_NEWCLASSTAG {
             let mut name = Vec::new();
@@ -76,28 +79,29 @@ impl ClassInfo {
             } else {
                 tag
             };
-            Ok(ClassInfo::Offset(offset))
+
+            let current_pos = reader.stream_position()?;
+            reader.seek(SeekFrom::Start(offset as u64 + 4))?; // 64 is key length, 4 is the tag we just read
+            let mut name_bytes = Vec::new();
+            let mut byte = [0u8; 1];
+            loop {
+                reader.read_exact(&mut byte)?;
+                if byte[0] == 0 {
+                    break;
+                }
+                name_bytes.push(byte[0]);
+            }
+            reader.seek(SeekFrom::Start(current_pos))?;
+            let class_name = String::from_utf8_lossy(&name_bytes).into_owned();
+
+            Ok(ClassInfo::Offset { offset, class_name })
         }
     }
 
-    pub fn get_class_name<R: Read + Seek>(&self, reader: &mut R) -> io::Result<String> {
+    pub fn get_class_name(&self) -> String {
         match self {
-            ClassInfo::NewClass(name) => Ok(name.clone()),
-            ClassInfo::Offset(offset) => {
-                let current_pos = reader.seek(SeekFrom::Current(0))?;
-                reader.seek(SeekFrom::Start(*offset as u64 + 4))?; // 64 is key length, 4 is the tag we just read
-                let mut name_bytes = Vec::new();
-                let mut byte = [0u8; 1];
-                loop {
-                    reader.read_exact(&mut byte)?;
-                    if byte[0] == 0 {
-                        break;
-                    }
-                    name_bytes.push(byte[0]);
-                }
-                reader.seek(SeekFrom::Start(current_pos))?;
-                Ok(String::from_utf8_lossy(&name_bytes).into_owned())
-            }
+            ClassInfo::NewClass(name) => name.clone(),
+            ClassInfo::Offset { class_name, .. } => class_name.clone(),
         }
     }
 }
@@ -132,7 +136,22 @@ impl BinRead for ClassInfo {
             } else {
                 tag
             };
-            Ok(ClassInfo::Offset(offset))
+
+            let current_pos = reader.stream_position()?;
+            reader.seek(SeekFrom::Start(offset as u64 + 4))?;
+
+            let mut name_bytes = Vec::new();
+            loop {
+                let byte: u8 = reader.read_type(endian)?;
+                if byte == 0 {
+                    break;
+                }
+                name_bytes.push(byte);
+            }
+            reader.seek(SeekFrom::Start(current_pos))?;
+            let class_name = String::from_utf8_lossy(&name_bytes).into_owned();
+
+            Ok(ClassInfo::Offset { offset, class_name })
         }
     }
 }
