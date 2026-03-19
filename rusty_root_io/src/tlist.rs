@@ -4,6 +4,7 @@ use crate::utils::binrw_read_string;
 use binrw::io::{Read, Seek, SeekFrom};
 use binrw::BinRead;
 use byteorder::ReadBytesExt;
+use std::ops::Deref;
 
 #[binrw::binread]
 #[derive(Default, Debug)]
