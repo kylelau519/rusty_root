@@ -3,10 +3,12 @@ use crate::tlist::TList;
 use crate::tstreamerinfo::TStreamerInfo;
 
 // https://root.cern/doc/v638/streamerinfo.html
-#[derive(Default)]
+#[derive(Debug, Default)]
+#[binrw::binread]
 pub struct StreamerInfo {
     pub streamer_info_header: TKey,
-    pub tlist: TList<TStreamerInfo>, // the last element of StreamerInfo is not TStreamerInfo but some object called "ListOfRules".. not written anywhere
+    // the last element of StreamerInfo is not TStreamerInfo but some object called "ListOfRules".. not written anywhere, we just skip for the sanity
+    pub tlist: TList<TStreamerInfo>,
 }
 
 #[cfg(test)]
@@ -95,11 +97,12 @@ mod tests {
 
         let mut combined_data = key_data;
         combined_data.extend_from_slice(&decompressed_data);
+        let len = combined_data.len();
         let mut cursor = std::io::Cursor::new(combined_data);
-        let tkey: TKey =
+        let _tkey: TKey =
             TKey::read_be(&mut cursor).expect("Failed to read TKey from combined data");
-        let tlist: TList<TStreamerInfo> =
+        let _tlist: TList<TStreamerInfo> =
             TList::read_be(&mut cursor).expect("Failed to read TList from decompressed data");
-        dbg!(&tlist.objects[10]);
+        assert_eq!(cursor.position() as usize, len);
     }
 }

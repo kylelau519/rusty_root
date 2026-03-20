@@ -3,8 +3,7 @@ use crate::tnamed::TNamed;
 use crate::tobjarray::TObjArray;
 use crate::tstreamer_element::TStreamerElement;
 use crate::utils::ClassInfo;
-use binrw::{binread, BinRead, BinReaderExt, BinResult, Endian};
-use byteorder::ReadBytesExt;
+use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Default, Debug)]
@@ -90,19 +89,16 @@ mod tests {
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/streamer_info.bin";
         let file = File::open(path).expect("Failed to open streamer info file");
         let mut reader = std::io::BufReader::new(file);
-        let tkey: TKey = TKey::read_tkey(&mut reader).expect("Failed to read TKey");
-        dbg!(&tkey);
-        let tlist: TList<()> =
+        let _tkey: TKey = TKey::read_tkey(&mut reader).expect("Failed to read TKey");
+        let _tlist: TList<()> =
             TList::read_tlist_metadata(&mut reader).expect("Failed to read TList");
-        dbg!(&tlist);
         let mut tstreamers_info: Vec<TStreamerInfo> = Vec::new();
-        for i in 0..1 {
+        for _i in 0..1 {
             let tstreamer_info = TStreamerInfo::read_tstreamer_info(&mut reader)
                 .expect("Failed to read TStreamerInfo");
-            dbg!(&tstreamer_info);
             tstreamers_info.push(tstreamer_info);
         }
-        dbg!(tstreamers_info);
+        assert_eq!(tstreamers_info.is_empty(), false);
     }
     use binrw::BinRead;
     #[test]
@@ -121,6 +117,5 @@ mod tests {
             TStreamerInfo::read_be(&mut reader).expect("Failed to read TStreamerInfo with BinRead");
         dbg!(&tstreamer_info);
         assert_eq!(tstreamer_info.f_checksum, 3753331260);
-        // let mut tstreamers_info: Vec<TStreamerInfo> = Vec::new();
     }
 }

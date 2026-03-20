@@ -11,51 +11,17 @@ use std::io::{Read, Seek};
 #[derive(Debug, Default)]
 pub struct TStreamerElementBase {
     #[br(map = |x: u32| x & K_BYTECOUNTMASK)]
-    byte_count: u32,
-    version: u16,
-    tnamed: TNamed,
-    f_type: u32,
-    f_size: u32,
-    f_array_length: u32,
-    f_array_dim: u32,
-    f_max_index: [u32; 5],
-    l_type_name: u8,
+    pub byte_count: u32,
+    pub version: u16,
+    pub tnamed: TNamed,
+    pub f_type: u32,
+    pub f_size: u32,
+    pub f_array_length: u32,
+    pub f_array_dim: u32,
+    pub f_max_index: [u32; 5],
+    pub l_type_name: u8,
     #[br(parse_with = binrw_read_string, args(l_type_name))]
-    type_name: String,
-}
-
-impl TStreamerElementBase {
-    pub fn read_tstreamer_element_base<R: std::io::Read + std::io::Seek>(
-        reader: &mut R,
-    ) -> io::Result<Self> {
-        let byte_count = reader.read_u32::<byteorder::BigEndian>()?;
-        let version = reader.read_u16::<byteorder::BigEndian>()?;
-        let tnamed = TNamed::read_tnamed(reader)?;
-        let f_type = reader.read_u32::<byteorder::BigEndian>()?;
-        let f_size = reader.read_u32::<byteorder::BigEndian>()?;
-        let f_array_length = reader.read_u32::<byteorder::BigEndian>()?;
-        let f_array_dim = reader.read_u32::<byteorder::BigEndian>()?;
-        let mut f_max_index = [0u32; 5];
-        for i in 0..5 {
-            // Even though f_max_index is [u8; 5], in the file we should read 4 bytes 5 times
-            let val = reader.read_u32::<byteorder::BigEndian>()?;
-            f_max_index[i] = val;
-        }
-        let l_type_name = reader.read_u8()?;
-        let type_name = crate::utils::read_string(reader, l_type_name as usize)?;
-        Ok(Self {
-            byte_count,
-            version,
-            tnamed,
-            f_type,
-            f_size,
-            f_array_length,
-            f_array_dim,
-            f_max_index,
-            l_type_name,
-            type_name,
-        })
-    }
+    pub type_name: String,
 }
 
 #[derive(Debug)]

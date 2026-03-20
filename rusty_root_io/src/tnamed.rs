@@ -1,7 +1,7 @@
 use crate::constant::K_BYTECOUNTMASK;
 use crate::tobject::TObject;
 use crate::utils::{self, binrw_read_string};
-use binrw::{binread, BinRead};
+use binrw::binread;
 use byteorder::ReadBytesExt;
 use std::io;
 use std::io::{Read, Seek, SeekFrom};
