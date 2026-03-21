@@ -27,7 +27,7 @@ where
     pub objects: Vec<TListElement<T>>,
 }
 
-// This is needed because in TList every object is read and followed a 'l_option" and a "option_string", not written in the link and is hidden...
+// TListElement is needed because in TList every object is read and followed a 'l_option" and a "option_string", not written in the link and is hidden...
 #[binrw::binread]
 #[derive(Default, Debug)]
 pub struct TListElement<T>

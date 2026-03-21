@@ -12,4 +12,5 @@ pub mod tobjarray;
 pub mod tobject;
 pub mod tstreamer_element;
 pub mod tstreamerinfo;
+pub mod tstring;
 pub mod utils;
