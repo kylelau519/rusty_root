@@ -1,7 +1,7 @@
 use crate::first_record::FirstRecordDict;
 use crate::keylist::KeyList;
 use crate::utils::ReaderDynWidth;
-use byteorder::{BigEndian, ReadBytesExt};
+use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read, Seek};
@@ -56,14 +56,13 @@ pub struct TFile {
     // other fields...
 }
 impl TFile {
-    pub fn open(path: &str) -> io::Result<Self> {
+    pub fn open(path: &str) -> BinResult<Self> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
-        let header = TFileHeader::read_header(&mut reader)?;
-        let first_data_record =
-            FirstRecordDict::read_first_record_dict(&mut reader, header.f_begin as u64)?;
+        let header = TFileHeader::read_be(&mut reader)?;
+        let first_data_record = FirstRecordDict::read_from(&mut reader, header.f_begin as u64)?;
         let key_list_offset = first_data_record.data.seek_keys;
-        let key_list = KeyList::read_keylist_at(&mut reader, key_list_offset)?;
+        let key_list = KeyList::read_from(&mut reader, key_list_offset)?;
         let contents = Arc::new([]);
         Ok(TFile {
             reader,
@@ -79,30 +78,32 @@ impl TFile {
     }
 }
 
-impl TFileHeader {
-    pub fn new() -> Self {
-        Self::default()
-    }
+impl BinRead for TFileHeader {
+    type Args<'a> = ();
 
-    pub fn read_header<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
+    fn read_options<R: Read + Seek>(
+        reader: &mut R,
+        endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> BinResult<Self> {
         let _magic = Self::parse_magic(reader)?;
-        let f_version = reader.read_u32::<BigEndian>()?;
-        let f_begin = reader.read_u32::<BigEndian>()?;
-        let reader_dyn_widht = ReaderDynWidth::from_tfile_version(f_version);
+        let f_version = reader.read_type(endian)?;
+        let f_begin = reader.read_type(endian)?;
+        let reader_dyn_width = ReaderDynWidth::from_tfile_version(f_version);
         // Read the rest of the header fields in the documented order
-        let f_end = reader_dyn_widht.read_ptr(reader)?;
-        let f_seek_free = reader_dyn_widht.read_ptr(reader)?;
-        let f_nbytes_free = reader.read_u32::<BigEndian>()?;
-        let n_free = reader.read_u32::<BigEndian>()?;
-        let f_nbytes_name = reader.read_u32::<BigEndian>()?;
-        let f_units = Self::parse_f_unit(reader)?;
-        let f_compress = reader.read_i32::<BigEndian>()?;
-        let f_seek_info = reader_dyn_widht.read_ptr(reader)?;
-        let f_nbytes_info = reader.read_u32::<BigEndian>()?;
-        let f_uuid_vers = reader.read_u16::<BigEndian>()?;
+        let f_end = reader_dyn_width.read_ptr(reader)?;
+        let f_seek_free = reader_dyn_width.read_ptr(reader)?;
+        let f_nbytes_free = reader.read_type(endian)?;
+        let n_free = reader.read_type(endian)?;
+        let f_nbytes_name = reader.read_type(endian)?;
+        let f_units = reader.read_type(endian)?;
+        let f_compress = reader.read_type(endian)?;
+        let f_seek_info = reader_dyn_width.read_ptr(reader)?;
+        let f_nbytes_info = reader.read_type(endian)?;
+        let f_uuid_vers = reader.read_type(endian)?;
         let f_uuid = Self::parse_f_uuid(reader)?;
 
-        let header = TFileHeader {
+        Ok(Self {
             _magic,
             f_version,
             f_begin,
@@ -117,14 +118,15 @@ impl TFileHeader {
             f_nbytes_info,
             f_uuid_vers,
             f_uuid,
-        };
-        Ok(header)
+        })
     }
-    fn parse_f_unit<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<u8> {
-        let mut units_buf = [0u8; 1];
-        reader.read_exact(&mut units_buf)?;
-        Ok(units_buf[0])
+}
+
+impl TFileHeader {
+    pub fn new() -> Self {
+        Self::default()
     }
+
     fn parse_f_uuid<R: std::io::Read + std::io::Seek>(reader: &mut R) -> io::Result<[u8; 16]> {
         let mut uuid_buf = [0u8; 16];
         reader.read_exact(&mut uuid_buf)?;
@@ -152,7 +154,7 @@ mod tests {
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
         let file = File::open(path).expect("Failed to open ROOT file");
         let mut reader = BufReader::new(file);
-        let header = match TFileHeader::read_header(&mut reader) {
+        let header = match TFileHeader::read_be(&mut reader) {
             Ok(h) => h,
             Err(e) => panic!("Failed to read ROOT header: {:?}", e),
         };

@@ -1,7 +1,7 @@
 use crate::tkey::TKey;
 use crate::utils::ReaderDynWidth;
-use byteorder::ReadBytesExt;
-use std::io::{Read, Seek};
+use binrw::io::{Read, Seek};
+use binrw::{binread, BinRead, BinReaderExt, BinResult, Endian};
 
 /*
 * ----------TKey--------------
@@ -49,28 +49,31 @@ pub struct TDictData {
     uuid: [u8; 16],
 }
 
+#[binread]
 #[derive(Debug)]
 pub struct TDictionary {
     tkey: TKey,
     data: TDictData,
 }
 
-impl TDictData {
-    pub fn read_dict_data_at<R: std::io::Read + std::io::Seek>(
+impl BinRead for TDictData {
+    type Args<'a> = ();
+
+    fn read_options<R: Read + Seek>(
         reader: &mut R,
-        offset: u64,
-    ) -> std::io::Result<Self> {
-        reader.seek(std::io::SeekFrom::Start(offset))?;
-        let version = reader.read_u16::<byteorder::BigEndian>()?;
+        endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> BinResult<Self> {
+        let version = reader.read_type(endian)?;
         let reader_dyn_width = ReaderDynWidth::from_tkey_version(version); // TDirectory uses version 1000 for 64-bit offsets
-        let datime_c = reader.read_u32::<byteorder::BigEndian>()?;
-        let datime_m = reader.read_u32::<byteorder::BigEndian>()?;
-        let n_bytes_keys = reader.read_u32::<byteorder::BigEndian>()?;
-        let n_bytes_name = reader.read_u32::<byteorder::BigEndian>()?;
+        let datime_c = reader.read_type(endian)?;
+        let datime_m = reader.read_type(endian)?;
+        let n_bytes_keys = reader.read_type(endian)?;
+        let n_bytes_name = reader.read_type(endian)?;
         let seek_dir = reader_dyn_width.read_ptr(reader)?;
         let seek_parent = reader_dyn_width.read_ptr(reader)?;
         let seek_keys = reader_dyn_width.read_ptr(reader)?;
-        let uuid_vers = reader.read_u16::<byteorder::BigEndian>()?;
+        let uuid_vers = reader.read_type(endian)?;
         let mut uuid = [0u8; 16];
         reader.read_exact(&mut uuid)?;
         match reader_dyn_width {
@@ -93,22 +96,18 @@ impl TDictData {
             uuid,
         })
     }
+}
 
-    pub fn read_dict_data<R: Read + Seek>(reader: &mut R) -> std::io::Result<Self> {
-        let loc = reader.seek(std::io::SeekFrom::Current(0))?;
-        Self::read_dict_data_at(reader, loc)
+impl TDictData {
+    pub fn read_from<R: Read + Seek>(reader: &mut R, offset: u64) -> BinResult<Self> {
+        reader.seek(binrw::io::SeekFrom::Start(offset))?;
+        Self::read_options(reader, Endian::Big, ())
     }
 }
 
 impl TDictionary {
-    pub fn read_tdict_at<R: Read + Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
-        let tkey = TKey::read_tkey_at(reader, offset)?;
-        let data = TDictData::read_dict_data(reader)?;
-        Ok(Self { tkey, data })
-    }
-
-    pub fn read_tdict<R: Read + Seek>(reader: &mut R) -> std::io::Result<Self> {
-        let loc = reader.seek(std::io::SeekFrom::Current(0))?;
-        Self::read_tdict_at(reader, loc)
+    pub fn read_from<R: Read + Seek>(reader: &mut R, offset: u64) -> BinResult<Self> {
+        reader.seek(binrw::io::SeekFrom::Start(offset))?;
+        Self::read_options(reader, Endian::Big, ())
     }
 }

@@ -41,32 +41,6 @@ pub struct TObject {
     pub pidf: u16,
 }
 
-impl TObject {
-    pub fn read_tobject_at<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
-        reader.seek(SeekFrom::Start(offset))?;
-        let version = reader.read_u16::<BigEndian>()?;
-        let f_uniqueid = reader.read_u32::<BigEndian>()?;
-        let f_bits = reader.read_u32::<BigEndian>()?;
-
-        let pidf = if (f_bits & K_IS_REFERENCED) != 0 {
-            reader.read_u16::<BigEndian>()?
-        } else {
-            0
-        };
-        Ok(TObject {
-            version,
-            f_uniqueid,
-            f_bits,
-            pidf,
-        })
-    }
-
-    pub fn read_tobject<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
-        let offset = reader.seek(SeekFrom::Current(0))?;
-        Self::read_tobject_at(reader, offset)
-    }
-}
-
 impl BinRead for TObject {
     type Args<'a> = ();
 

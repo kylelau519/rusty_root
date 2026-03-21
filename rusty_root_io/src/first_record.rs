@@ -1,48 +1,29 @@
 use crate::tkey::TKey;
-use crate::utils;
+use crate::tstring::TString;
 use crate::utils::ReaderDynWidth;
-use byteorder::{BigEndian, ReadBytesExt};
-use std::io;
-use std::io::{Read, Seek, SeekFrom};
+use binrw::io::{Read, Seek};
+use binrw::{binread, BinRead, BinReaderExt, BinResult, Endian};
 
+#[binread]
 #[derive(Default, Debug)]
 pub struct FirstRecordDict {
     pub key: TKey,
     pub data: FirstRecordData,
 }
-
 impl FirstRecordDict {
-    pub fn read_first_record_dict<R: Read + Seek>(reader: &mut R, offset: u64) -> io::Result<Self> {
-        let key = TKey::read_tkey_at(reader, offset)?;
-        let data = FirstRecordData::read_header_dict_data(reader)?;
-        Ok(Self { key, data })
+    pub fn read_from<R: Read + Seek>(reader: &mut R, offset: u64) -> BinResult<Self> {
+        reader.seek(std::io::SeekFrom::Start(offset))?;
+        let first_record_dict = FirstRecordDict::read_be(reader)?;
+        Ok(first_record_dict)
     }
 }
-
 /*
- * ---------- DATA ----------
- * Byte Range      Member Name      Description
- * 0...0           lname           Number of bytes in the TFile name (TNamed::fName)
- * 1...            Name            lName bytes with the name of the TFile <file-name> (TNamed::fName)
- * 0...0           lTitle          Number of bytes in the TFile title (TNamed::fTitle)
- * 1...            Title           lTitle bytes with the title of the TFile <file-title> (TNamed::fTitle)
- * 0...1           Version         TDirectory class version identifier (TDirectory::Class_Version())
- * 2...5           DatimeC         Date and time when directory was created (TDirectory::fDatimeC)
- *                                | (year-1995)<<26 | month<<22 | day<<17 | hour<<12 | minute<<6 | second
- * 6...9           DatimeM         Date and time when directory was last modified (TDirectory::fDatimeM)
- *                                | (year-1995)<<26 | month<<22 | day<<17 | hour<<12 | minute<<6 | second
- * 10...13         NbytesKeys      Number of bytes in the associated KeysList record (TDirectory::fNbyteskeys)
- * 14...17         NbytesName      Number of bytes in TKey+TNamed at creation (TDirectory::fNbytesName)
- * 18...21 [18...25] SeekDir       Byte offset of directory record in file (64) (TDirectory::fSeekDir)
- * 22...25 [26...33] SeekParent    Byte offset of parent directory record in file (0) (TDirectory::fSeekParent)
- * 26...29 [34...41] SeekKeys      Byte offset of associated KeysList record in file (TDirectory::fSeekKeys)
+ * https://root.cern/doc/v636/tfile.html
  */
 #[derive(Default, Debug)]
 pub struct FirstRecordData {
-    pub l_name: u8,
-    pub name: String,
-    pub l_title: u8,
-    pub title: String,
+    pub name: TString,
+    pub title: TString,
     pub version: u16,
     pub datime_c: u32,
     pub datime_m: u32,
@@ -53,26 +34,21 @@ pub struct FirstRecordData {
     pub seek_keys: u64,
 }
 
-impl FirstRecordData {
-    pub fn read_header_dict_data<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
-        let loc = reader.seek(SeekFrom::Current(0))?;
-        Self::read_header_dict_data_at(reader, loc)
-    }
+impl BinRead for FirstRecordData {
+    type Args<'a> = ();
 
-    pub fn read_header_dict_data_at<R: Read + Seek>(
+    fn read_options<R: Read + Seek>(
         reader: &mut R,
-        offset: u64,
-    ) -> io::Result<Self> {
-        reader.seek(SeekFrom::Start(offset))?;
-        let l_name = reader.read_u8()?;
-        let name = utils::read_string(reader, l_name as usize)?;
-        let l_title = reader.read_u8()?;
-        let title = utils::read_string(reader, l_title as usize)?;
-        let version = reader.read_u16::<BigEndian>()?;
-        let datime_c = reader.read_u32::<BigEndian>()?;
-        let datime_m = reader.read_u32::<BigEndian>()?;
-        let n_bytes_keys = reader.read_u32::<BigEndian>()?;
-        let n_bytes_name = reader.read_u32::<BigEndian>()?;
+        endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> BinResult<Self> {
+        let name = TString::read_options(reader, endian, ())?;
+        let title = TString::read_options(reader, endian, ())?;
+        let version = reader.read_type(endian)?;
+        let datime_c = reader.read_type(endian)?;
+        let datime_m = reader.read_type(endian)?;
+        let n_bytes_keys = reader.read_type(endian)?;
+        let n_bytes_name = reader.read_type(endian)?;
 
         let reader_dyn_width = ReaderDynWidth::from_tkey_version(version); // TDirectory uses version 1000 for 64-bit offsets
         let seek_dir = reader_dyn_width.read_ptr(reader)?;
@@ -80,9 +56,7 @@ impl FirstRecordData {
         let seek_keys = reader_dyn_width.read_ptr(reader)?;
 
         Ok(Self {
-            l_name,
             name,
-            l_title,
             title,
             version,
             datime_c,
@@ -109,10 +83,8 @@ mod tests {
         let file = File::open(path).expect("Failed to open ROOT file");
         let mut reader = BufReader::new(file);
         let tkey_offset = 100u64;
-        let key =
-            TKey::read_tkey_at(&mut reader, tkey_offset).expect("Failed to read TKey at offset");
+        let key = TKey::read_from(&mut reader, tkey_offset).expect("Failed to read TKey at offset");
         assert_eq!(key.name, "user.holau.700590.Sh_2212_llvvjj_ss.e8433_s3681_r13167_r13146_p6697.46550259._000001.output.root");
-        dbg!(&key);
     }
 
     #[test]
@@ -122,18 +94,14 @@ mod tests {
         let file = File::open(path).expect("Failed to open ROOT file");
         let mut reader = BufReader::new(file);
         let begin = 100u64;
-        let f_units = 4u8;
-        dbg!(begin, f_units);
         let first_data_key =
-            TKey::read_tkey_at(&mut reader, begin).expect("Failed to read TKey at offset");
-        let first_data_data = FirstRecordData::read_header_dict_data(&mut reader)
+            TKey::read_from(&mut reader, begin).expect("Failed to read TKey at offset");
+        let first_data_data = FirstRecordData::read_options(&mut reader, Endian::Big, ())
             .expect("Failed to read header dict data at offset");
         assert_eq!(decode_datime(first_data_key.datime), "2025-09-27 06:16:14");
         assert_eq!(
             decode_datime(first_data_data.datime_m),
             "2025-09-27 06:16:17"
         );
-        dbg!(&first_data_key);
-        dbg!(&first_data_data);
     }
 }

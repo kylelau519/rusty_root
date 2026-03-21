@@ -1,7 +1,6 @@
 use crate::tkey::TKey;
 use binrw::binread;
-use byteorder::ReadBytesExt;
-use std::io::{Read, Seek, SeekFrom};
+use binrw::BinRead;
 
 // https://root.cern/doc/v638/keyslist.html
 /*
@@ -39,19 +38,12 @@ pub struct KeyList {
 }
 
 impl KeyList {
-    pub fn read_keylist_at<R: Read + Seek>(reader: &mut R, offset: u64) -> std::io::Result<Self> {
-        let key = TKey::read_tkey_at(reader, offset)?;
-        let n_keys = reader.read_u32::<byteorder::BigEndian>()?;
-        let mut keys = Vec::with_capacity(n_keys as usize);
-        for _ in 0..n_keys {
-            let key = TKey::read_tkey(reader)?;
-            keys.push(key);
-        }
-        Ok(Self { key, n_keys, keys })
-    }
-    pub fn read_keylist<R: std::io::Read + std::io::Seek>(reader: &mut R) -> std::io::Result<Self> {
-        let loc = reader.seek(SeekFrom::Current(0))?;
-        Self::read_keylist_at(reader, loc)
+    pub fn read_from<R: binrw::io::Read + binrw::io::Seek>(
+        reader: &mut R,
+        offset: u64,
+    ) -> binrw::BinResult<Self> {
+        reader.seek(binrw::io::SeekFrom::Start(offset))?;
+        Self::read_be(reader)
     }
 }
 
@@ -67,22 +59,8 @@ mod tests {
         let key_list_offset = 80365942;
         let file = File::open(path).expect("Failed to open ROOT file");
         let mut reader = BufReader::new(file);
-        let key_list = KeyList::read_keylist_at(&mut reader, key_list_offset)
+        let key_list = KeyList::read_from(&mut reader, key_list_offset)
             .expect("Failed to read KeyList at offset");
-        dbg!(&key_list);
-    }
-    use binrw::BinRead;
-    #[test]
-    fn test_read_keylist_binrw() {
-        let path =
-            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
-        let key_list_offset = 80365942;
-        let file = File::open(path).expect("Failed to open ROOT file");
-        let mut reader = BufReader::new(file);
-        reader
-            .seek(SeekFrom::Start(key_list_offset))
-            .expect("Failed to seek to key list offset");
-        let key_list = KeyList::read_be(&mut reader).expect("Failed to read KeyList with BinRead");
         dbg!(&key_list);
     }
 }

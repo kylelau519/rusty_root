@@ -8,6 +8,15 @@ pub struct TString {
     pub string: String,
 }
 
+impl TString {
+    pub fn new() -> Self {
+        Self {
+            l_string: 0,
+            string: String::new(),
+        }
+    }
+}
+
 impl BinRead for TString {
     type Args<'a> = ();
 
@@ -42,5 +51,17 @@ impl Deref for TString {
 
     fn deref(&self) -> &Self::Target {
         &self.string
+    }
+}
+
+impl PartialEq<&str> for TString {
+    fn eq(&self, other: &&str) -> bool {
+        &self.string == other
+    }
+}
+
+impl PartialEq<TString> for &str {
+    fn eq(&self, other: &TString) -> bool {
+        self == &other.string
     }
 }

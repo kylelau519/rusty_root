@@ -59,28 +59,10 @@ impl BinRead for TStreamerInfo {
     }
 }
 
-impl TStreamerInfo {
-    pub fn read_tstreamer_info_at<R: Read + Seek>(
-        reader: &mut R,
-        offset: u64,
-    ) -> std::io::Result<Self> {
-        reader.seek(std::io::SeekFrom::Start(offset))?;
-        // Use the BinRead implementation for consistency
-        Self::read_be(reader)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
-    }
-
-    pub fn read_tstreamer_info<R: Read + Seek>(reader: &mut R) -> std::io::Result<Self> {
-        let loc = reader.seek(SeekFrom::Current(0))?;
-        Self::read_tstreamer_info_at(reader, loc)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tkey::TKey;
-    use crate::tlist::TList;
     use std::fs::File;
 
     #[test]
@@ -89,33 +71,27 @@ mod tests {
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/streamer_info.bin";
         let file = File::open(path).expect("Failed to open streamer info file");
         let mut reader = std::io::BufReader::new(file);
-        let _tkey: TKey = TKey::read_tkey(&mut reader).expect("Failed to read TKey");
-        let _tlist: TList<()> =
-            TList::read_tlist_metadata(&mut reader).expect("Failed to read TList");
+        let _tkey: TKey = TKey::read_be(&mut reader).expect("Failed to read TKey");
+        let _tlist_header: TestTListHeader =
+            TestTListHeader::read_be(&mut reader).expect("Failed to read TList header");
         let mut tstreamers_info: Vec<TStreamerInfo> = Vec::new();
-        for _i in 0..1 {
-            let tstreamer_info = TStreamerInfo::read_tstreamer_info(&mut reader)
-                .expect("Failed to read TStreamerInfo");
-            tstreamers_info.push(tstreamer_info);
-        }
+        let tstreamer_info =
+            TStreamerInfo::read_be(&mut reader).expect("Failed to read TStreamerInfo");
+        assert_eq!(tstreamer_info.f_checksum, 3753331260);
+        tstreamers_info.push(tstreamer_info);
         assert_eq!(tstreamers_info.is_empty(), false);
     }
-    use binrw::BinRead;
-    #[test]
-    fn test_read_streamer_info_binrw() {
-        let path =
-            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/streamer_info.bin";
-        let file = File::open(path).expect("Failed to open streamer info file");
-        let mut reader = std::io::BufReader::new(file);
-
-        let tkey: TKey = TKey::read_be(&mut reader).expect("Failed to read TKey with BinRead");
-        dbg!(&tkey);
-        let tlist: TList<()> =
-            TList::read_tlist_metadata(&mut reader).expect("Failed to read TList with BinRead");
-        dbg!(&tlist);
-        let tstreamer_info: TStreamerInfo =
-            TStreamerInfo::read_be(&mut reader).expect("Failed to read TStreamerInfo with BinRead");
-        dbg!(&tstreamer_info);
-        assert_eq!(tstreamer_info.f_checksum, 3753331260);
+    // Define a test-only struct that mirrors the fields of TList before the objects vector, so we can read just those fields and skip the rest.
+    #[binrw::binread]
+    #[derive(Debug)]
+    struct TestTListHeader {
+        #[br(map = |x: u32| x & crate::constant::K_BYTECOUNTMASK)]
+        pub byte_count: u32,
+        pub version: u16,
+        pub tobject: crate::tobject::TObject,
+        pub f_name_byte: u8,
+        #[br(parse_with = crate::utils::binrw_read_string, args(f_name_byte))]
+        pub f_name: String,
+        pub n_objects: u32,
     }
 }
