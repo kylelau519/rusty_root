@@ -19,9 +19,6 @@ pub struct TStreamerElementBase {
     pub f_array_dim: u32,
     pub f_max_index: [u32; 5],
     pub type_name: TString,
-    // pub l_type_name: u8,
-    // #[br(parse_with = binrw_read_string, args(l_type_name))]
-    // pub type_name: String,
 }
 
 #[derive(Debug)]

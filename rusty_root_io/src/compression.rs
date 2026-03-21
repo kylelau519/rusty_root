@@ -38,7 +38,7 @@ pub fn decompress(data: &[u8], compression_level: i32) -> io::Result<Arc<[u8]>> 
         }
         CompressionAlgorithm::Lz4 => {
             let decompressed_data = lz4_flex::decompress_size_prepended(data)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                .map_err(|e| io::Error::other(e))?;
             Ok(Arc::from(decompressed_data))
         }
         CompressionAlgorithm::Zstd => {

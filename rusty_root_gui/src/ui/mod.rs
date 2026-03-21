@@ -21,7 +21,7 @@ pub fn update(state: &mut State, message: Message) {
 }
 
 /// View logic: return a widget tree for the current `State`.
-pub fn view(state: &State) -> Column<Message> {
+pub fn view(state: &State) -> Column<'_, Message> {
     column![
         text(format!("Count: {}", state.counter)),
         button("+").on_press(Message::Increment),
