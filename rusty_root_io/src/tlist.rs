@@ -1,5 +1,5 @@
 use crate::tobject::TObject;
-use crate::utils::binrw_read_string;
+use crate::tstring::TString;
 use binrw::BinRead;
 use std::ops::Deref;
 
@@ -16,9 +16,7 @@ where
     pub byte_count: u32,
     pub version: u16,
     pub tobject: TObject,
-    pub f_name_byte: u8,
-    #[br(parse_with = binrw_read_string, args(f_name_byte))]
-    pub f_name: String,
+    pub f_name: TString,
     pub n_objects: u32,
     #[br(count = n_objects)]
     pub objects: Vec<TListElement<T>>,
@@ -33,9 +31,7 @@ where
     for<'a> T: BinRead<Args<'a> = ()>,
 {
     pub object: T,
-    pub option_len: u8,
-    #[br(parse_with = binrw_read_string, args(option_len))]
-    pub option: String,
+    pub option: TString,
 }
 
 impl<T> Deref for TListElement<T>

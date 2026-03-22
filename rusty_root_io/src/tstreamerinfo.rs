@@ -89,9 +89,7 @@ mod tests {
         pub byte_count: u32,
         pub version: u16,
         pub tobject: crate::tobject::TObject,
-        pub f_name_byte: u8,
-        #[br(parse_with = crate::utils::binrw_read_string, args(f_name_byte))]
-        pub f_name: String,
+        pub f_name: crate::tstring::TString,
         pub n_objects: u32,
     }
 }

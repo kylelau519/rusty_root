@@ -169,13 +169,6 @@ pub fn decode_datime(datime: u32) -> String {
     )
 }
 
-pub fn read_string<R: Read>(reader: &mut R, length: usize) -> io::Result<String> {
-    let mut str_buf = vec![0u8; length];
-    reader.read_exact(&mut str_buf)?;
-    let s = String::from_utf8_lossy(&str_buf).to_string();
-    Ok(s)
-}
-
 pub fn debug_in_ascii(bytes: &[u8]) -> String {
     bytes
         .iter()
@@ -187,27 +180,4 @@ pub fn debug_in_ascii(bytes: &[u8]) -> String {
             }
         })
         .collect::<String>()
-}
-
-pub fn binrw_read_string<R: Read + Seek>(
-    reader: &mut R,
-    endian: Endian,
-    args: (u8,), // This receives the 'l_name' we just read
-) -> BinResult<String> {
-    let (l_name,) = args;
-
-    let length = if l_name == 255 {
-        // Overflow case: read the next 4 bytes as the true length
-        reader.read_type::<u32>(endian)?
-    } else {
-        l_name as u32
-    };
-
-    if length == 0 {
-        return Ok(String::new());
-    }
-
-    let mut buf = vec![0u8; length as usize];
-    reader.read_exact(&mut buf)?;
-    Ok(String::from_utf8_lossy(&buf).into_owned())
 }
