@@ -1,6 +1,8 @@
 use crate::tkey::TKey;
 use crate::tlist::TList;
 use crate::tstreamerinfo::TStreamerInfo;
+use binrw::io::{Read, Seek, SeekFrom};
+use binrw::BinRead;
 
 // https://root.cern/doc/v638/streamerinfo.html
 #[derive(Debug, Default)]
@@ -9,6 +11,13 @@ pub struct StreamerInfo {
     pub streamer_info_header: TKey,
     // the last element of StreamerInfo is not TStreamerInfo but some object called "ListOfRules".. not written anywhere, we just skip for the sanity
     pub tlist: TList<TStreamerInfo>,
+}
+
+impl StreamerInfo {
+    pub fn read_from<R: Read + Seek>(reader: &mut R, offset: u64) -> binrw::BinResult<Self> {
+        reader.seek(SeekFrom::Start(offset))?;
+        Self::read_be(reader)
+    }
 }
 
 #[cfg(test)]
@@ -104,7 +113,7 @@ mod tests {
         let _tlist: TList<TStreamerInfo> =
             TList::read_be(&mut cursor).expect("Failed to read TList from decompressed data");
         // dbg!(&_tkey);
-        // dbg!(&_tlist);
+        dbg!(&_tlist);
         // assert_eq!(cursor.position() as usize, len);
     }
 }

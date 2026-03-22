@@ -13,8 +13,7 @@ pub struct FirstRecordDict {
 impl FirstRecordDict {
     pub fn read_from<R: Read + Seek>(reader: &mut R, offset: u64) -> BinResult<Self> {
         reader.seek(std::io::SeekFrom::Start(offset))?;
-        let first_record_dict = FirstRecordDict::read_be(reader)?;
-        Ok(first_record_dict)
+        Self::read_be(reader)
     }
 }
 /*
