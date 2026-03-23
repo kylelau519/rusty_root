@@ -22,49 +22,41 @@ impl CompressionAlgorithm {
             _ => CompressionAlgorithm::None,
         }
     }
-}
-
-pub fn decompress(data: &[u8], compression_level: i32) -> io::Result<Arc<[u8]>> {
-    let algo = CompressionAlgorithm::from_compression_level(compression_level);
-    match algo {
-        CompressionAlgorithm::Zlib => {
-            let mut decoder = flate2::read::ZlibDecoder::new(&data[9..]);
-            let _magic = String::from_utf8_lossy(&data[0..2]);
-            let _compressed_size = u32::from_le_bytes([data[3], data[4], data[5], 0]);
-            let uncompressed_size = u32::from_le_bytes([data[6], data[7], data[8], 0]);
-            let mut decompressed_data = Vec::with_capacity(uncompressed_size as usize);
-            decoder.read_to_end(&mut decompressed_data)?;
-            Ok(Arc::from(decompressed_data))
+    pub fn from_magic(magic: &[u8]) -> Self {
+        if magic.len() < 2 {
+            return CompressionAlgorithm::None;
         }
-        CompressionAlgorithm::Lz4 => {
-            let decompressed_data = lz4_flex::decompress_size_prepended(data)
-                .map_err(|e| io::Error::other(e))?;
-            Ok(Arc::from(decompressed_data))
+        // Matching on bytes is faster and more idiomatic than converting to String
+        match (magic[0], magic[1]) {
+            (b'Z', b'L') => CompressionAlgorithm::Zlib,
+            (b'L', b'4') | (b'C', b'S') => CompressionAlgorithm::Lz4,
+            (b'Z', b'S') => CompressionAlgorithm::Zstd,
+            _ => CompressionAlgorithm::None,
         }
-        CompressionAlgorithm::Zstd => {
-            let decompressed_data = zstd::decode_all(data)?;
-            Ok(Arc::from(decompressed_data))
-        }
-        CompressionAlgorithm::None => Ok(Arc::from(data.to_vec())),
     }
-}
-
-pub trait HasCompressedData {
-    fn get_compressed_data(&self) -> &[u8];
-    fn get_compressed_len(&self) -> usize;
-    fn get_uncompressed_len(&self) -> usize;
-    fn decompressed_data(&self) -> Option<Arc<[u8]>>;
-    fn decompressed_data_mut(&mut self) -> &mut Option<Arc<[u8]>>;
-
-    fn decompress_into(&self, compression_level: i32) -> io::Result<Arc<[u8]>> {
-        let compressed_data = self.get_compressed_data();
-        decompress(compressed_data, compression_level)
-    }
-
-    fn decompress_and_store(&mut self, compression_level: i32) -> io::Result<Arc<[u8]>> {
-        let decompressed_data = self.decompress_into(compression_level)?;
-        self.decompressed_data_mut()
-            .replace(decompressed_data.clone());
-        Ok(decompressed_data)
+    pub fn decompress(data: &[u8]) -> io::Result<Arc<[u8]>> {
+        let algo = Self::from_magic(data);
+        match algo {
+            CompressionAlgorithm::Zlib => {
+                let mut decoder = flate2::read::ZlibDecoder::new(&data[9..]);
+                let _magic = String::from_utf8_lossy(&data[0..2]);
+                let compressed_size = u32::from_le_bytes([data[3], data[4], data[5], 0]);
+                assert_eq!(compressed_size as usize, data.len() - 9);
+                let uncompressed_size = u32::from_le_bytes([data[6], data[7], data[8], 0]);
+                let mut decompressed_data = Vec::with_capacity(uncompressed_size as usize);
+                decoder.read_to_end(&mut decompressed_data)?;
+                Ok(Arc::from(decompressed_data))
+            }
+            CompressionAlgorithm::Lz4 => {
+                let decompressed_data =
+                    lz4_flex::decompress_size_prepended(data).map_err(|e| io::Error::other(e))?;
+                Ok(Arc::from(decompressed_data))
+            }
+            CompressionAlgorithm::Zstd => {
+                let decompressed_data = zstd::decode_all(data)?;
+                Ok(Arc::from(decompressed_data))
+            }
+            CompressionAlgorithm::None => Ok(Arc::from(data.to_vec())),
+        }
     }
 }

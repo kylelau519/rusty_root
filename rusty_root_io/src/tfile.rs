@@ -146,4 +146,25 @@ mod tests {
         };
         dbg!(&header);
     }
+
+    #[test]
+    fn test_open_root_file() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+        let header = TFileHeader::read_be(&mut reader).expect("Failed to read ROOT header");
+        dbg!(&header);
+        let first_data_record = FirstRecordDict::read_from(&mut reader, header.f_begin as u64)
+            .expect("Failed to read first data record");
+        dbg!(&first_data_record);
+        let key_list_offset = first_data_record.data.seek_keys;
+        let key_list =
+            KeyList::read_from(&mut reader, key_list_offset).expect("Failed to read key list");
+        dbg!(&key_list);
+        // let streamer_info = StreamerInfo::read_from(&mut reader, header.f_seek_info)
+        //     .expect("Failed to read streamer info");
+        // dbg!(&streamer_info);
+    }
 }

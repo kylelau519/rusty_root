@@ -1,7 +1,9 @@
+use crate::compression::CompressionAlgorithm;
 use crate::tstring::TString;
 use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use std::fmt;
-use std::io::{Read, Seek};
+use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::sync::Arc;
 
 /*
  * https://root.cern/doc/v638/tdirectory.html
@@ -109,6 +111,23 @@ impl BinRead for TKey {
         })
     }
 }
+
+impl TKey {
+    pub fn decompress_payload<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+    ) -> BinResult<Cursor<Arc<[u8]>>> {
+        let compressed_size = self.n_bytes - u32::from(self.key_len);
+        let payload_offset = self.seek_key + u64::from(self.key_len);
+        reader.seek(SeekFrom::Start(payload_offset))?;
+        let mut compressed_data = vec![0u8; compressed_size as usize];
+        reader.read_exact(&mut compressed_data)?;
+        let decompressed_data = CompressionAlgorithm::decompress(&compressed_data)?;
+        assert_eq!(decompressed_data.len(), self.obj_len as usize);
+        Ok(Cursor::new(decompressed_data))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

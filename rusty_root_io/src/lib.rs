@@ -5,6 +5,7 @@ pub mod keylist;
 pub mod streamerinfo;
 pub mod tdictionary;
 pub mod tfile;
+pub mod th1;
 pub mod tkey;
 pub mod tlist;
 pub mod tnamed;

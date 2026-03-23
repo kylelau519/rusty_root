@@ -2,11 +2,10 @@ use crate::tkey::TKey;
 use crate::tlist::TList;
 use crate::tstreamerinfo::TStreamerInfo;
 use binrw::io::{Read, Seek, SeekFrom};
-use binrw::BinRead;
+use binrw::{BinRead, BinResult, Endian};
 
 // https://root.cern/doc/v638/streamerinfo.html
 #[derive(Debug, Default)]
-#[binrw::binread]
 pub struct StreamerInfo {
     pub streamer_info_header: TKey,
     // the last element of StreamerInfo is not TStreamerInfo but some object called "ListOfRules".. not written anywhere, we just skip for the sanity
@@ -16,10 +15,37 @@ pub struct StreamerInfo {
 impl StreamerInfo {
     pub fn read_from<R: Read + Seek>(reader: &mut R, offset: u64) -> binrw::BinResult<Self> {
         reader.seek(SeekFrom::Start(offset))?;
-        Self::read_be(reader)
+        Self::read_options(reader, binrw::Endian::Big, ())
     }
 }
 
+impl BinRead for StreamerInfo {
+    type Args<'a> = ();
+
+    fn read_options<R: Read + Seek>(
+        reader: &mut R,
+        endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> BinResult<Self> {
+        let streamer_info_header = TKey::read_options(reader, endian, ())?;
+        let decompressed_data = {
+            let mut compressed_data = vec![
+                0u8;
+                (streamer_info_header.n_bytes - streamer_info_header.key_len as u32)
+                    as usize
+            ];
+            reader.read_exact(&mut compressed_data)?;
+            crate::compression::CompressionAlgorithm::decompress(&compressed_data)
+                .expect("Failed to decompress StreamerInfo data")
+        };
+        let mut cursor = std::io::Cursor::new(decompressed_data);
+        let tlist = TList::<TStreamerInfo>::read_options(&mut cursor, endian, ())?;
+        Ok(Self {
+            streamer_info_header,
+            tlist,
+        })
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -39,7 +65,7 @@ mod tests {
         // dbg!(&key);
     }
 
-    use crate::compression::decompress;
+    use crate::compression::CompressionAlgorithm;
     #[test]
     fn test_decode_streamer_info() {
         let path =
@@ -60,7 +86,9 @@ mod tests {
             .expect("Failed to read compressed data");
 
         // Decompress the data
-        let decompressed_data = decompress(&data, 101).expect("Failed to decompress data");
+        let decompressed_data =
+            CompressionAlgorithm::decompress(&data).expect("Failed to decompress data");
+
         assert_eq!(decompressed_data.len(), obj_len as usize);
     }
 
@@ -102,7 +130,7 @@ mod tests {
             buf
         };
         let decompressed_data =
-            decompress(&compressed_data, 101).expect("Failed to decompress data");
+            CompressionAlgorithm::decompress(&compressed_data).expect("Failed to decompress data");
 
         let mut combined_data = key_data;
         combined_data.extend_from_slice(&decompressed_data);
