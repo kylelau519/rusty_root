@@ -2,13 +2,15 @@ use crate::tkey::TKey;
 use crate::tlist::TList;
 use crate::tstreamerinfo::TStreamerInfo;
 use binrw::io::{Read, Seek, SeekFrom};
-use binrw::{BinRead, BinResult, Endian};
+use binrw::BinRead;
 
 // https://root.cern/doc/v638/streamerinfo.html
+#[binrw::binread]
 #[derive(Debug, Default)]
 pub struct StreamerInfo {
     pub streamer_info_header: TKey,
     // the last element of StreamerInfo is not TStreamerInfo but some object called "ListOfRules".. not written anywhere, we just skip for the sanity
+    #[br(parse_with = TKey::read_from_payload, args(&streamer_info_header))]
     pub tlist: TList<TStreamerInfo>,
 }
 
@@ -19,33 +21,6 @@ impl StreamerInfo {
     }
 }
 
-impl BinRead for StreamerInfo {
-    type Args<'a> = ();
-
-    fn read_options<R: Read + Seek>(
-        reader: &mut R,
-        endian: Endian,
-        _args: Self::Args<'_>,
-    ) -> BinResult<Self> {
-        let streamer_info_header = TKey::read_options(reader, endian, ())?;
-        let decompressed_data = {
-            let mut compressed_data = vec![
-                0u8;
-                (streamer_info_header.n_bytes - streamer_info_header.key_len as u32)
-                    as usize
-            ];
-            reader.read_exact(&mut compressed_data)?;
-            crate::compression::CompressionAlgorithm::decompress(&compressed_data)
-                .expect("Failed to decompress StreamerInfo data")
-        };
-        let mut cursor = std::io::Cursor::new(decompressed_data);
-        let tlist = TList::<TStreamerInfo>::read_options(&mut cursor, endian, ())?;
-        Ok(Self {
-            streamer_info_header,
-            tlist,
-        })
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -53,7 +28,7 @@ mod tests {
     use std::fs::File;
     use std::io::{BufReader, Read, Seek, SeekFrom};
     #[test]
-    fn test_streamer_info() {
+    fn test_streamer_info_header() {
         let path =
             "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
         let streamer_info_offset = 80357582;
@@ -62,7 +37,7 @@ mod tests {
         let key = TKey::read_from(&mut reader, streamer_info_offset)
             .expect("Failed to read TKey at offset");
         assert_eq!(key.title, "Doubly linked list");
-        // dbg!(&key);
+        dbg!(&key);
     }
 
     use crate::compression::CompressionAlgorithm;
@@ -88,6 +63,7 @@ mod tests {
         // Decompress the data
         let decompressed_data =
             CompressionAlgorithm::decompress(&data).expect("Failed to decompress data");
+        dbg!(&decompressed_data.len());
 
         assert_eq!(decompressed_data.len(), obj_len as usize);
     }
@@ -102,11 +78,9 @@ mod tests {
         let file = File::open(path).expect("Failed to open ROOT file");
         let mut reader = BufReader::new(file);
 
-        // Read the TKey at the streamer info offset
         let key = TKey::read_from(&mut reader, streamer_info_offset)
             .expect("Failed to read TKey at offset");
         assert_eq!(key.title, "Doubly linked list");
-
         let payload_len = (key.n_bytes - key.key_len as u32) as usize;
 
         let key_data = {
@@ -129,19 +103,39 @@ mod tests {
                 .expect("Failed to read compressed data");
             buf
         };
+        // i forgot why it is Necessary to combine and read the key and decompressed together
+        // my guess is there's some decompressed data point back to the tkey
         let decompressed_data =
             CompressionAlgorithm::decompress(&compressed_data).expect("Failed to decompress data");
-
         let mut combined_data = key_data;
         combined_data.extend_from_slice(&decompressed_data);
-        let len = combined_data.len();
         let mut cursor = std::io::Cursor::new(combined_data);
         let _tkey: TKey =
             TKey::read_be(&mut cursor).expect("Failed to read TKey from combined data");
         let _tlist: TList<TStreamerInfo> =
             TList::read_be(&mut cursor).expect("Failed to read TList from decompressed data");
-        // dbg!(&_tkey);
         dbg!(&_tlist);
-        // assert_eq!(cursor.position() as usize, len);
+    }
+    #[test]
+    fn test_read_streamer_with_tkey() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let streamer_info_offset = 80357582;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+
+        let tkey = TKey::read_from(&mut reader, streamer_info_offset)
+            .expect("Failed to read TKey at offset");
+        dbg!(&tkey);
+
+        let mut decompressed_cursor = tkey
+            .decompress_full(&mut reader)
+            .expect("Failed to decompress StreamerInfo data");
+        decompressed_cursor
+            .seek(SeekFrom::Start(tkey.key_len as u64))
+            .expect("Failed to seek to decompressed data after TKey");
+        let tlist = TList::<TStreamerInfo>::read_be(&mut decompressed_cursor)
+            .expect("Failed to read TList of TStreamerInfo from decompressed data");
+        dbg!(&tlist);
     }
 }

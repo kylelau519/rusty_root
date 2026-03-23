@@ -163,8 +163,8 @@ mod tests {
         let key_list =
             KeyList::read_from(&mut reader, key_list_offset).expect("Failed to read key list");
         dbg!(&key_list);
-        // let streamer_info = StreamerInfo::read_from(&mut reader, header.f_seek_info)
-        //     .expect("Failed to read streamer info");
-        // dbg!(&streamer_info);
+        let streamer_info = StreamerInfo::read_from(&mut reader, header.f_seek_info)
+            .expect("Failed to read streamer info");
+        dbg!(&streamer_info);
     }
 }

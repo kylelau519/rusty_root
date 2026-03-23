@@ -113,19 +113,51 @@ impl BinRead for TKey {
 }
 
 impl TKey {
-    pub fn decompress_payload<R: Read + Seek>(
-        &self,
-        reader: &mut R,
-    ) -> BinResult<Cursor<Arc<[u8]>>> {
+    // the payload is deserialized, there's no way to correctly read the payload without the tkey header
+    // Decompress the payload and return a Cursor over the combined key data and decompressed payload
+    pub fn decompress_full<R: Read + Seek>(&self, reader: &mut R) -> BinResult<Cursor<Arc<[u8]>>> {
+        let mut key_data = vec![0u8; self.key_len as usize];
+        reader.seek(SeekFrom::Start(self.seek_key))?;
+        reader.read_exact(&mut key_data)?;
+
         let compressed_size = self.n_bytes - u32::from(self.key_len);
-        let payload_offset = self.seek_key + u64::from(self.key_len);
-        dbg!(payload_offset);
-        reader.seek(SeekFrom::Start(payload_offset))?;
         let mut compressed_data = vec![0u8; compressed_size as usize];
         reader.read_exact(&mut compressed_data)?;
-        let decompressed_data = CompressionAlgorithm::decompress(&compressed_data)?;
-        assert_eq!(decompressed_data.len(), self.obj_len as usize);
-        Ok(Cursor::new(decompressed_data))
+
+        let decompressed_payload = CompressionAlgorithm::decompress(&compressed_data)?;
+        assert_eq!(decompressed_payload.len(), self.obj_len as usize);
+
+        let mut combined = key_data;
+        combined.extend_from_slice(&decompressed_payload);
+        return Ok(Cursor::new(Arc::from(combined)));
+    }
+
+    // Move the seek to the key's data and then call decompress_full
+    pub fn decompress_full_from<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+        offset: u64,
+    ) -> BinResult<Cursor<Arc<[u8]>>> {
+        reader.seek(SeekFrom::Start(offset))?;
+        self.decompress_full(reader)
+    }
+
+    // A helper function to read the decompressed payload instead
+    pub fn read_from_payload<T, R>(
+        reader: &mut R,
+        endian: Endian,
+        args: (&Self,), // Pass the header in so we can decompress
+    ) -> BinResult<T>
+    where
+        T: for<'a> BinRead<Args<'a> = ()>,
+        R: Read + Seek,
+    {
+        let (header,) = args;
+
+        let mut combined_cursor = header.decompress_full(reader)?;
+        combined_cursor.seek(SeekFrom::Start(header.key_len as u64))?; // Skip the key data to position at the payload
+
+        T::read_options(&mut combined_cursor, endian, ())
     }
 }
 
@@ -159,34 +191,5 @@ mod tests {
         dbg!(&key);
         assert_eq!(key.class_name, "TFile");
         assert_eq!(key.name, "user.holau.700590.Sh_2212_llvvjj_ss.e8433_s3681_r13167_r13146_p6697.46550259._000001.output.root");
-    }
-    use crate::compression::CompressionAlgorithm;
-    use std::io::BufReader;
-    #[test]
-    fn test_read_payload_with_streamer() {
-        let path =
-            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
-        let streamer_info_offset = 80357582;
-        let file = File::open(path).expect("Failed to open ROOT file");
-        let mut reader = BufReader::new(file);
-
-        let tkey = TKey::read_from(&mut reader, streamer_info_offset)
-            .expect("Failed to read TKey at offset");
-        let mut data = vec![0u8; (tkey.n_bytes - tkey.key_len as u32) as usize];
-        reader
-            .read_exact(&mut data)
-            .expect("Failed to read compressed data");
-        let decompressed_data =
-            CompressionAlgorithm::decompress(&data).expect("Failed to decompress data");
-
-        reader
-            .seek(SeekFrom::Start(streamer_info_offset + tkey.key_len as u64))
-            .expect("Failed to seek to compressed data");
-
-        let decompressed_data_cursor = tkey
-            .decompress_payload(&mut reader)
-            .expect("Failed to decompress StreamerInfo data");
-
-        assert_eq!(decompressed_data_cursor.get_ref(), &decompressed_data);
     }
 }
