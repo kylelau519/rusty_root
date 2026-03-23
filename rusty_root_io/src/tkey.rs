@@ -119,6 +119,7 @@ impl TKey {
     ) -> BinResult<Cursor<Arc<[u8]>>> {
         let compressed_size = self.n_bytes - u32::from(self.key_len);
         let payload_offset = self.seek_key + u64::from(self.key_len);
+        dbg!(payload_offset);
         reader.seek(SeekFrom::Start(payload_offset))?;
         let mut compressed_data = vec![0u8; compressed_size as usize];
         reader.read_exact(&mut compressed_data)?;
@@ -158,5 +159,34 @@ mod tests {
         dbg!(&key);
         assert_eq!(key.class_name, "TFile");
         assert_eq!(key.name, "user.holau.700590.Sh_2212_llvvjj_ss.e8433_s3681_r13167_r13146_p6697.46550259._000001.output.root");
+    }
+    use crate::compression::CompressionAlgorithm;
+    use std::io::BufReader;
+    #[test]
+    fn test_read_payload_with_streamer() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let streamer_info_offset = 80357582;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+
+        let tkey = TKey::read_from(&mut reader, streamer_info_offset)
+            .expect("Failed to read TKey at offset");
+        let mut data = vec![0u8; (tkey.n_bytes - tkey.key_len as u32) as usize];
+        reader
+            .read_exact(&mut data)
+            .expect("Failed to read compressed data");
+        let decompressed_data =
+            CompressionAlgorithm::decompress(&data).expect("Failed to decompress data");
+
+        reader
+            .seek(SeekFrom::Start(streamer_info_offset + tkey.key_len as u64))
+            .expect("Failed to seek to compressed data");
+
+        let decompressed_data_cursor = tkey
+            .decompress_payload(&mut reader)
+            .expect("Failed to decompress StreamerInfo data");
+
+        assert_eq!(decompressed_data_cursor.get_ref(), &decompressed_data);
     }
 }
