@@ -9,10 +9,10 @@ pub struct TString {
 }
 
 impl TString {
-    pub fn new() -> Self {
+    pub fn new(s: &str) -> Self {
         Self {
-            l_string: 0,
-            string: String::new(),
+            l_string: s.len() as u8,
+            string: s.to_string(),
         }
     }
 }

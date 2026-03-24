@@ -41,7 +41,7 @@ where
             remaining_bytes: 0,
             version: 0,
             tobject: TObject::default(),
-            name: TString::new(),
+            name: TString::default(),
             n_objects: 0,
             f_lower_bound: 0,
             objects: Vec::new(),
