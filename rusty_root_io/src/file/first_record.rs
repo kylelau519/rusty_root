@@ -1,6 +1,6 @@
-use crate::tkey::TKey;
-use crate::tstring::TString;
-use crate::utils::ReaderDynWidth;
+use crate::core::utils::ReaderDynWidth;
+use crate::objects::tkey::TKey;
+use crate::objects::tstring::TString;
 use binrw::io::{Read, Seek};
 use binrw::{binread, BinRead, BinReaderExt, BinResult, Endian};
 
@@ -72,7 +72,7 @@ impl BinRead for FirstRecordData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::decode_datime;
+    use crate::core::utils::decode_datime;
     use std::fs::File;
     use std::io::BufReader;
     #[test]

@@ -1,5 +1,5 @@
-use crate::tobject::TObject;
-use crate::tstring::TString;
+use crate::objects::tobject::TObject;
+use crate::objects::tstring::TString;
 use binrw::BinRead;
 use std::ops::Deref;
 
@@ -12,7 +12,7 @@ where
     // 2. T must be readable with no arguments for any lifetime 'a
     for<'a> T: BinRead<Args<'a> = ()>,
 {
-    #[br(map = |x: u32| x & crate::constant::K_BYTECOUNTMASK)]
+    #[br(map = |x: u32| x & crate::core::constant::K_BYTECOUNTMASK)]
     pub byte_count: u32,
     pub version: u16,
     pub tobject: TObject,

@@ -1,6 +1,6 @@
-use crate::constant::K_BYTECOUNTMASK;
-use crate::tobject::TObject;
-use crate::tstring::TString;
+use crate::core::constant::K_BYTECOUNTMASK;
+use crate::objects::tobject::TObject;
+use crate::objects::tstring::TString;
 use binrw::io::{Read, Seek, SeekFrom};
 use binrw::{binread, BinRead, BinResult};
 

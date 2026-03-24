@@ -1,6 +1,6 @@
-use crate::tkey::TKey;
-use crate::tlist::TList;
-use crate::tstreamerinfo::TStreamerInfo;
+use crate::objects::tkey::TKey;
+use crate::objects::tlist::TList;
+use crate::streamer::tstreamerinfo::TStreamerInfo;
 use binrw::io::{Read, Seek, SeekFrom};
 use binrw::BinRead;
 
@@ -24,7 +24,6 @@ impl StreamerInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tkey::TKey;
     use std::fs::File;
     use std::io::{BufReader, Read, Seek, SeekFrom};
     #[test]
@@ -40,7 +39,7 @@ mod tests {
         dbg!(&key);
     }
 
-    use crate::compression::CompressionAlgorithm;
+    use crate::core::compression::CompressionAlgorithm;
     #[test]
     fn test_decode_streamer_info() {
         let path =
@@ -68,7 +67,7 @@ mod tests {
         assert_eq!(decompressed_data.len(), obj_len as usize);
     }
 
-    use crate::tlist::TList;
+    use crate::objects::tlist::TList;
     use binrw::BinRead;
     #[test]
     fn test_read_all_streamer_info() {

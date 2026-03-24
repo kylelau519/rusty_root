@@ -1,7 +1,7 @@
-use crate::constant::K_BYTECOUNTMASK;
-use crate::tnamed::TNamed;
-use crate::tstring::TString;
-use crate::utils::ClassInfo;
+use crate::core::constant::K_BYTECOUNTMASK;
+use crate::core::utils::ClassInfo;
+use crate::objects::tnamed::TNamed;
+use crate::objects::tstring::TString;
 use binrw::io::{Read, Seek};
 use binrw::{binread, BinRead, BinReaderExt, BinResult, Endian};
 

@@ -1,7 +1,7 @@
-use crate::first_record::FirstRecordDict;
-use crate::keylist::KeyList;
-use crate::streamerinfo::StreamerInfo;
-use crate::utils::ReaderDynWidth;
+use crate::core::utils::ReaderDynWidth;
+use crate::file::first_record::FirstRecordDict;
+use crate::file::keylist::KeyList;
+use crate::streamer::streamerinfo::StreamerInfo;
 use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use std::fs::File;
 use std::io;

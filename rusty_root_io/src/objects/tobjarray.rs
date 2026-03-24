@@ -1,7 +1,7 @@
-use crate::constant::K_BYTECOUNTMASK;
-use crate::tobject::TObject;
-use crate::tstring::TString;
-use crate::utils::ClassInfo;
+use crate::core::constant::K_BYTECOUNTMASK;
+use crate::core::utils::ClassInfo;
+use crate::objects::tobject::TObject;
+use crate::objects::tstring::TString;
 use binrw::{binread, BinRead};
 use std::default::Default;
 

@@ -1,4 +1,4 @@
-use crate::tkey::TKey;
+use crate::objects::tkey::TKey;
 use binrw::binread;
 use binrw::BinRead;
 

@@ -1,7 +1,7 @@
 use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use std::io::{Read, Seek};
 
-use crate::constant::K_IS_REFERENCED;
+use crate::core::constant::K_IS_REFERENCED;
 /*
 * TObject
 * https://root.cern/doc/v638/tobject.html

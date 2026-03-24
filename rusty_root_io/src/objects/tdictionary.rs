@@ -1,5 +1,5 @@
-use crate::tkey::TKey;
-use crate::utils::ReaderDynWidth;
+use crate::core::utils::ReaderDynWidth;
+use crate::objects::tkey::TKey;
 use binrw::io::{Read, Seek};
 use binrw::{binread, BinRead, BinReaderExt, BinResult, Endian};
 

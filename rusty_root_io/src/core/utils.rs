@@ -1,4 +1,4 @@
-use crate::constant::{K_MAP_OFFSET, K_NEWCLASSTAG, K_NEW_CLASSBIT};
+use crate::core::constant::{K_MAP_OFFSET, K_NEWCLASSTAG, K_NEW_CLASSBIT};
 use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io;
@@ -61,7 +61,7 @@ impl Default for ClassInfo {
 impl ClassInfo {
     pub fn read_class_info<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
         let tag = reader.read_u32::<BigEndian>()?;
-        if tag == crate::constant::K_NEWCLASSTAG {
+        if tag == K_NEWCLASSTAG {
             let mut name = Vec::new();
             let mut byte = [0u8; 1];
             loop {

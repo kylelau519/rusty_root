@@ -1,8 +1,8 @@
-use crate::constant::K_BYTECOUNTMASK;
-use crate::tnamed::TNamed;
-use crate::tobjarray::TObjArray;
-use crate::tstreamer_element::TStreamerElement;
-use crate::utils::ClassInfo;
+use crate::core::constant::K_BYTECOUNTMASK;
+use crate::core::utils::ClassInfo;
+use crate::objects::tnamed::TNamed;
+use crate::objects::tobjarray::TObjArray;
+use crate::streamer::tstreamer_element::TStreamerElement;
 use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use std::io::{Read, Seek, SeekFrom};
 
@@ -62,7 +62,7 @@ impl BinRead for TStreamerInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tkey::TKey;
+    use crate::objects::tkey::TKey;
     use std::fs::File;
 
     #[test]
@@ -85,11 +85,11 @@ mod tests {
     #[binrw::binread]
     #[derive(Debug)]
     struct TestTListHeader {
-        #[br(map = |x: u32| x & crate::constant::K_BYTECOUNTMASK)]
+        #[br(map = |x: u32| x & crate::core::constant::K_BYTECOUNTMASK)]
         pub byte_count: u32,
         pub version: u16,
-        pub tobject: crate::tobject::TObject,
-        pub f_name: crate::tstring::TString,
+        pub tobject: crate::objects::tobject::TObject,
+        pub f_name: crate::objects::tstring::TString,
         pub n_objects: u32,
     }
 }

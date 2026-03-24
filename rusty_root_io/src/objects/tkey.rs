@@ -1,5 +1,5 @@
-use crate::compression::CompressionAlgorithm;
-use crate::tstring::TString;
+use crate::core::compression::CompressionAlgorithm;
+use crate::objects::tstring::TString;
 use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use std::fmt;
 use std::io::{Cursor, Read, Seek, SeekFrom};
@@ -164,7 +164,7 @@ impl TKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::decode_datime;
+    use crate::core::utils::decode_datime;
     #[test]
     fn test_decode_datime() {
         let mut key = TKey::new();
