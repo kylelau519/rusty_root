@@ -22,6 +22,16 @@ where
     pub objects: Vec<TListElement<T>>,
 }
 
+impl<T> TList<T>
+where
+    T: BinRead + 'static,
+    for<'a> T: BinRead<Args<'a> = ()>,
+{
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.objects.iter().map(|elem| &elem.object)
+    }
+}
+
 // TListElement is needed because in TList every object is read and followed a 'l_option" and a "option_string", not written in the link and is hidden...
 #[binrw::binread]
 #[derive(Default, Debug)]

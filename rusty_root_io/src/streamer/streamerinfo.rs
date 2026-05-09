@@ -1,8 +1,12 @@
 use crate::objects::tkey::TKey;
 use crate::objects::tlist::TList;
+use crate::streamer::registry::{ClassSchema, FieldKind, FieldSchema};
 use crate::streamer::tstreamerinfo::TStreamerInfo;
 use binrw::io::{Read, Seek, SeekFrom};
 use binrw::BinRead;
+use core::iter::IntoIterator;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 // https://root.cern/doc/v638/streamerinfo.html
 #[binrw::binread]
@@ -18,6 +22,27 @@ impl StreamerInfo {
     pub fn read_from<R: Read + Seek>(reader: &mut R, offset: u64) -> binrw::BinResult<Self> {
         reader.seek(SeekFrom::Start(offset))?;
         Self::read_options(reader, binrw::Endian::Big, ())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &TStreamerInfo> {
+        self.tlist.iter()
+}
+
+pub struct StreamerRegistry {
+    pub classes: HashMap<String, Arc<ClassSchema>>,
+}
+
+impl StreamerRegistry {
+    pub fn new() -> Self {
+        Self {
+            classes: HashMap::new(),
+        }
+    }
+
+    pub fn register_from_streamerinfo(&mut self, streamerinfo: &StreamerInfo) {
+        for t_streamerinfo in &streamerinfo {
+            
+        }
     }
 }
 

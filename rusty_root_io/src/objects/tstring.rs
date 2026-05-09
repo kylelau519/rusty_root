@@ -41,7 +41,8 @@ impl BinRead for TString {
 
         let mut data_bytes = vec![0u8; actual_length as usize];
         reader.read_exact(&mut data_bytes)?;
-        let string = String::from_utf8_lossy(&data_bytes).into_owned();
+        let string = String::from_utf8(data_bytes)
+            .map_err(|e| binrw::io::Error::new(binrw::io::ErrorKind::InvalidData, e))?;
         Ok(Self { l_string, string })
     }
 }

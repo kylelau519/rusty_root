@@ -58,6 +58,11 @@ impl BinRead for TStreamerInfo {
         }
     }
 }
+impl TStreamerInfo {
+    pub fn iter(&self) -> impl Iterator<Item = &TStreamerElement> {
+        self.tobjarray.iter()
+    }
+}
 
 #[cfg(test)]
 mod tests {

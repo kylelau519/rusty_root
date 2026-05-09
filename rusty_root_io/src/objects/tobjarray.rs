@@ -48,3 +48,13 @@ where
         }
     }
 }
+
+impl<T> TObjArray<T>
+where
+    T: BinRead + 'static,
+    for<'a> T: BinRead<Args<'a> = ()>,
+{
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.objects.iter()
+    }
+}
