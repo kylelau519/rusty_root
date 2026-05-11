@@ -1,12 +1,13 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::objects::tkey::TKey;
 use crate::objects::tlist::TList;
-use crate::streamer::registry::{ClassSchema, FieldKind, FieldSchema};
+use crate::streamer::registry::{ClassSchema, FieldSchema};
+use crate::streamer::tstreamer_element::TStreamerType;
 use crate::streamer::tstreamerinfo::TStreamerInfo;
 use binrw::io::{Read, Seek, SeekFrom};
 use binrw::BinRead;
-use core::iter::IntoIterator;
-use std::collections::HashMap;
-use std::sync::Arc;
 
 // https://root.cern/doc/v638/streamerinfo.html
 #[binrw::binread]
@@ -16,6 +17,8 @@ pub struct StreamerInfo {
     // the last element of StreamerInfo is not TStreamerInfo but some object called "ListOfRules".. not written anywhere, we just skip for the sanity
     #[br(parse_with = TKey::read_from_payload, args(&streamer_info_header))]
     pub tlist: TList<TStreamerInfo>,
+    #[br(ignore)]
+    registry: HashMap<String, Arc<ClassSchema>>,
 }
 
 impl StreamerInfo {
@@ -26,24 +29,66 @@ impl StreamerInfo {
 
     pub fn iter(&self) -> impl Iterator<Item = &TStreamerInfo> {
         self.tlist.iter()
-}
+    }
 
-pub struct StreamerRegistry {
-    pub classes: HashMap<String, Arc<ClassSchema>>,
-}
+    pub fn populate_registry(&mut self) {
+        // Pass 1: index all TStreamerInfo by class name
+        let tsi_map: HashMap<&str, &TStreamerInfo> = self
+            .tlist
+            .iter()
+            .map(|tsi| (tsi.tnamed.name.as_str(), tsi))
+            .collect();
 
-impl StreamerRegistry {
-    pub fn new() -> Self {
-        Self {
-            classes: HashMap::new(),
+        // Pass 2: register each class, recursing into base classes first
+        let names: Vec<String> = tsi_map.keys().map(|s| s.to_string()).collect();
+        for name in &names {
+            register_tstreamerinfo(name, &tsi_map, &mut self.registry);
         }
     }
 
-    pub fn register_from_streamerinfo(&mut self, streamerinfo: &StreamerInfo) {
-        for t_streamerinfo in &streamerinfo {
-            
+    pub fn get_schema(&self, class_name: &str) -> Option<&Arc<ClassSchema>> {
+        self.registry.get(class_name)
+    }
+}
+
+fn register_tstreamerinfo(
+    name: &str,
+    tsi_map: &HashMap<&str, &TStreamerInfo>,
+    registry: &mut HashMap<String, Arc<ClassSchema>>,
+) {
+    if registry.contains_key(name) {
+        return;
+    }
+
+    let tsi = match tsi_map.get(name) {
+        Some(tsi) => tsi,
+        None => return, // not in this file's StreamerInfo, skip
+    };
+
+    // Recurse into base classes before processing this one so that
+    // FieldKind::Base references are already in the registry when we need them.
+    for elem in tsi.iter() {
+        if let TStreamerType::TStreamerBase { .. } = &elem.tstreamer_type {
+            let base_name = elem.tstreamer_element_base.tnamed.name.as_str();
+            register_tstreamerinfo(base_name, tsi_map, registry);
         }
     }
+
+    let fields: Vec<FieldSchema> = tsi
+        .iter()
+        .map(|elem| FieldSchema {
+            name: elem.tstreamer_element_base.tnamed.name.to_string(),
+            kind: elem.to_field_kind(registry),
+        })
+        .collect();
+
+    let schema = Arc::new(ClassSchema {
+        name: name.to_string(),
+        version: tsi.f_class_version as u16,
+        checksum: tsi.f_checksum,
+        fields,
+    });
+    registry.insert(name.to_string(), schema);
 }
 
 #[cfg(test)]
@@ -161,5 +206,23 @@ mod tests {
         let tlist = TList::<TStreamerInfo>::read_be(&mut decompressed_cursor)
             .expect("Failed to read TList of TStreamerInfo from decompressed data");
         dbg!(&tlist);
+    }
+
+    #[test]
+    fn test_streamer_info_registry() {
+        let path =
+            "/Users/kylelau519/Programming/rusty_root/rusty_root_io/testfiles/wzqcd_mc20a.root";
+        let streamer_info_offset = 80357582;
+        let file = File::open(path).expect("Failed to open ROOT file");
+        let mut reader = BufReader::new(file);
+
+        let mut streamer_info = StreamerInfo::read_from(&mut reader, streamer_info_offset)
+            .expect("Failed to read StreamerInfo");
+        streamer_info.populate_registry();
+
+        // Check that we can get the schema for a known class
+        let class_name = "TArrayF";
+        let schema = streamer_info.get_schema(class_name);
+        dbg!(schema.unwrap());
     }
 }
