@@ -30,19 +30,19 @@ impl StreamerInfo {
     pub fn iter(&self) -> impl Iterator<Item = &TStreamerInfo> {
         self.tlist.iter()
     }
-
+    // turning the TStreamerInfo into our rust usable ClassSchemas
     pub fn populate_registry(&mut self) {
         // Pass 1: index all TStreamerInfo by class name
-        let tsi_map: HashMap<&str, &TStreamerInfo> = self
+        let tstreamerinfo_map: HashMap<&str, &TStreamerInfo> = self
             .tlist
             .iter()
             .map(|tsi| (tsi.tnamed.name.as_str(), tsi))
             .collect();
 
         // Pass 2: register each class, recursing into base classes first
-        let names: Vec<String> = tsi_map.keys().map(|s| s.to_string()).collect();
+        let names: Vec<String> = tstreamerinfo_map.keys().map(|s| s.to_string()).collect();
         for name in &names {
-            register_tstreamerinfo(name, &tsi_map, &mut self.registry);
+            register_tstreamerinfo(name, &tstreamerinfo_map, &mut self.registry);
         }
     }
 
@@ -53,14 +53,14 @@ impl StreamerInfo {
 
 fn register_tstreamerinfo(
     name: &str,
-    tsi_map: &HashMap<&str, &TStreamerInfo>,
+    tstreamerinfo_map: &HashMap<&str, &TStreamerInfo>,
     registry: &mut HashMap<String, Arc<ClassSchema>>,
 ) {
     if registry.contains_key(name) {
         return;
     }
 
-    let tsi = match tsi_map.get(name) {
+    let tsi = match tstreamerinfo_map.get(name) {
         Some(tsi) => tsi,
         None => return, // not in this file's StreamerInfo, skip
     };
@@ -70,7 +70,7 @@ fn register_tstreamerinfo(
     for elem in tsi.iter() {
         if let TStreamerType::TStreamerBase { .. } = &elem.tstreamer_type {
             let base_name = elem.tstreamer_element_base.tnamed.name.as_str();
-            register_tstreamerinfo(base_name, tsi_map, registry);
+            register_tstreamerinfo(base_name, tstreamerinfo_map, registry);
         }
     }
 
@@ -221,8 +221,14 @@ mod tests {
         streamer_info.populate_registry();
 
         // Check that we can get the schema for a known class
-        let class_name = "TArrayF";
-        let schema = streamer_info.get_schema(class_name);
-        dbg!(schema.unwrap());
+        let registry = &streamer_info.registry;
+        registry.iter().for_each(|(name, schema)| {
+            println!(
+                "Class: {}, version: {}, fields: {}",
+                name,
+                schema.version,
+                schema.fields.len()
+            );
+        });
     }
 }
