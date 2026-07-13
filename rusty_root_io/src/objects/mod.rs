@@ -1,3 +1,4 @@
+pub mod tattribute;
 pub mod tdictionary;
 pub mod th1;
 pub mod tkey;

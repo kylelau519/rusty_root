@@ -20,3 +20,4 @@ pub mod core;
 pub mod file;
 pub mod objects;
 pub mod streamer;
+pub mod tree;

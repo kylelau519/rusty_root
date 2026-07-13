@@ -129,12 +129,33 @@ impl TStreamerElement {
         match &self.tstreamer_type {
             TStreamerType::TStreamerBase { .. } => {
                 let name = base.tnamed.name.as_str();
-                match registry.get(name) {
-                    Some(schema) => FieldKind::Base(schema.clone()),
-                    None => FieldKind::Unknown,
+                // TObject::Streamer is one of ROOT's special no-byte-count classes
+                // (see objects/tobject.rs) — it must never be read as a generic Base,
+                // and it may not even have its own entry in this file's StreamerInfo.
+                if name == "TObject" {
+                    FieldKind::TObject
+                } else {
+                    match registry.get(name) {
+                        Some(schema) => FieldKind::Base(schema.clone()),
+                        None => FieldKind::Unknown,
+                    }
                 }
             }
-            TStreamerType::TStreamerBasicType => f_type_to_field_kind(base.f_type, base.f_array_length, ""),
+            TStreamerType::TStreamerBasicType => {
+                // f_type 61/62 (kObject/kAny) is an embedded object member
+                // (TObject-derived / not, respectively) that ROOT serialized
+                // via the "basic type" descriptor instead of
+                // TStreamerObject(Any) — resolve it the same way those do.
+                if base.f_type == 61 || base.f_type == 62 {
+                    let class_name = base.type_name.trim_end_matches('\0');
+                    match registry.get(class_name) {
+                        Some(schema) => FieldKind::Object(schema.clone()),
+                        None => FieldKind::Unknown,
+                    }
+                } else {
+                    f_type_to_field_kind(base.f_type, base.f_array_length, "")
+                }
+            }
             TStreamerType::TStreamerString | TStreamerType::TStreamerSTLString => FieldKind::TString,
             TStreamerType::TStreamerBasicPointer { name, .. } => {
                 f_type_to_field_kind(base.f_type, base.f_array_length, name)
