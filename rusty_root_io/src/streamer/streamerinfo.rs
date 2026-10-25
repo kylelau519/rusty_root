@@ -53,6 +53,35 @@ impl StreamerInfo {
     }
 }
 
+fn build_plan(name: &str, registry: &mut HashMap<String, Arc<ClassSchema>>) {
+    let mut plan: Vec<CompiledReader> = Vec::new();
+    if let Some(schema) = registry.get(name) {
+        if schema.plan_completed {
+            return;
+        }
+        let fields = &schema.fields;
+        fields.iter().for_each(|field| {
+            let kind = &field.kind;
+            let name = &field.name;
+        });
+        schema.plan = plan;
+        schema.plan_completed = true;
+    }
+}
+
+fn get_plan(
+    name: &str,
+    registry: &HashMap<String, Arc<ClassSchema>>,
+) -> Option<Vec<CompiledReader>> {
+    if let Some(schema) = registry.get(name) {
+        if schema.plan_completed {
+            return Some(schema.plan.clone());
+        } else {
+            return None;
+        }
+    }
+    None
+}
 fn register_tstreamerinfo(
     name: &str,
     tstreamerinfo_map: &HashMap<&str, &TStreamerInfo>,
@@ -67,24 +96,32 @@ fn register_tstreamerinfo(
         None => return, // not in this file's StreamerInfo, skip
     };
 
-    // Recurse into base classes before processing this one so that
-    // FieldKind::Base references are already in the registry when we need them.
+    // Recurse into every embedded (non-pointer) dependency before processing
+    // this one, so registry.get() lookups in to_field_kind never depend on
+    // HashMap<_, _>::keys() iteration order. Safe for all of these because a
+    // value member can never cycle back to its own containing class — unlike
+    // TStreamerObjectPointer (left lazy/on-demand, since pointers can cycle).
     for elem in tsi.iter() {
-        if let TStreamerType::TStreamerBase { .. } = &elem.tstreamer_type {
-            let base_name = elem.tstreamer_element_base.tnamed.name.as_str();
-            dbg!(base_name);
-            register_tstreamerinfo(base_name, tstreamerinfo_map, registry);
-        } else if let TStreamerType::TStreamerBasicType = &elem.tstreamer_type {
-            let base = &elem.tstreamer_element_base;
-            // f_type 61/62 (kObject/kAny): an embedded object member ROOT
-            // serialized via the "basic type" descriptor instead of
-            // TStreamerObject(Any). Safe to eagerly recurse like TStreamerBase:
-            // an embedded (non-pointer) value member can never cycle back to
-            // its own containing class, unlike TStreamerObjectPointer.
-            if base.f_type == 61 || base.f_type == 62 {
-                let class_name = base.type_name.trim_end_matches('\0');
+        match &elem.tstreamer_type {
+            TStreamerType::TStreamerBase { .. } => {
+                let base_name = elem.tstreamer_element_base.tnamed.name.as_str();
+                register_tstreamerinfo(base_name, tstreamerinfo_map, registry);
+            }
+            TStreamerType::TStreamerObject | TStreamerType::TStreamerObjectAny => {
+                let class_name = elem.tstreamer_element_base.type_name.trim_end_matches('\0');
                 register_tstreamerinfo(class_name, tstreamerinfo_map, registry);
             }
+            TStreamerType::TStreamerBasicType => {
+                let base = &elem.tstreamer_element_base;
+                // f_type 61/62 (kObject/kAny): an embedded object member ROOT
+                // serialized via the "basic type" descriptor instead of
+                // TStreamerObject(Any).
+                if base.f_type == 61 || base.f_type == 62 {
+                    let class_name = base.type_name.trim_end_matches('\0');
+                    register_tstreamerinfo(class_name, tstreamerinfo_map, registry);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -96,32 +133,15 @@ fn register_tstreamerinfo(
         })
         .collect();
     dbg!(&fields);
-    let mut plan: Vec<CompiledReader> = Vec::new();
-    fields.iter().for_each(|field| {
-        // Base/Object fields already carry the resolved Arc<ClassSchema> right
-        // in their FieldKind (to_field_kind resolved it via the registry when
-        // this field was built) — no need to look anything up by name here,
-        // which also sidesteps the fact that a field's own name (e.g. "fXaxis")
-        // isn't the same as the class name it refers to (e.g. "TAxis").
-        let sub_plan = match &field.kind {
-            FieldKind::Base(schema) | FieldKind::Object(schema) => Some(schema.plan.clone()),
-            _ => None,
-        };
-        if let Some(sub_plan) = sub_plan {
-            plan.extend(sub_plan);
-        } else {
-            // If the field is not a base class, we can build a reader for it
-            let reader = build_field_reader(&field.kind, registry);
-            plan.push(reader);
-        }
-    });
-
+    let plan: Vec<CompiledReader> = Vec::new();
+    let plan_completed = false;
     let schema = Arc::new(ClassSchema {
         name: name.to_string(),
         version: tsi.f_class_version as u16,
         checksum: tsi.f_checksum,
         fields,
         plan,
+        plan_completed,
     });
     registry.insert(name.to_string(), schema);
 }

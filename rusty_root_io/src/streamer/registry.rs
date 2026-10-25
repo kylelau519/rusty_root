@@ -3,6 +3,9 @@ use binrw::{BinRead, BinReaderExt, BinResult, Endian};
 use std::collections::HashMap;
 use std::{fmt, sync::Arc};
 
+use crate::core::constant::{
+    K_BYTECOUNTMASK, K_HAS_BYTECOUNT, K_NEWCLASSTAG, K_NEW_CLASSBIT, K_NULLTAG,
+};
 use crate::objects::tnamed::TNamed;
 use crate::objects::tobject::TObject;
 use crate::objects::tstring::TString;
@@ -10,20 +13,39 @@ use crate::objects::tstring::TString;
 pub trait ReadSeek: Read + Seek {}
 impl<T: Read + Seek> ReadSeek for T {}
 
+#[derive(Clone)]
 pub struct ClassSchema {
     pub name: String,
     pub version: u16,
     pub checksum: u32,
     pub fields: Vec<FieldSchema>, // ordered, base class fields first
     pub plan: Vec<CompiledReader>,
+    pub plan_completed: bool, // whether the plan is completed, if not, it may be missing some base class or object class
 }
 
+impl fmt::Debug for ClassSchema {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ClassSchema")
+            .field("name", &self.name)
+            .field("version", &self.version)
+            .field("checksum", &self.checksum)
+            .field("fields", &self.fields)
+            .field("plan_completed", &self.plan_completed)
+            .finish()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct FieldSchema {
     pub name: String,
     pub kind: FieldKind,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+// FieldKind gives enough info to build a reader, If the type is a pointer to an int, it should help building a reader to read that pointer (8 byte), instead of actually getting the  data
+// note2: To resolve type 0 and type 62 61, there is a completed registry {name: vec<read instruction>}
+// when it see a base, check the completed registry, if not there, continue(maybe build the missing first but potentially get into inf loop), else finish the builder and pop it out, until the registry is exhausted.
+// DAG can resolve this but too troublesome to implement
 pub enum FieldKind {
     // Primitives (f_type 1-5, 8-9, 11-18)
     Bool,
@@ -37,33 +59,30 @@ pub enum FieldKind {
     U64,
     F32,
     F64,
-    // Built-in objects (f_type 65-67)
-    TString,
+    TString, // Built-in objects (f_type 65-67)
     TObject,
     TNamed,
     // Fixed-size array of primitive, count from f_array_length (f_type 20+x)
-    FixedArray {
-        elem: Box<FieldKind>,
-        count: usize,
-    },
-    // Variable-length array, count comes from another field at runtime (f_type 40+x)
-    VariableArray {
-        elem: Box<FieldKind>,
-        count_field: String,
-    },
+    FixedArray { elem: Box<FieldKind>, count: usize },
+    PrimativePointer { elem: Box<FieldKind> },
     // Object types
-    Base(Arc<ClassSchema>),
-    Object(Arc<ClassSchema>),
-    ObjectPointer(Arc<ClassSchema>),
-    StlVector(Box<FieldKind>),
-    // Unrecognised / unsupported — reader will skip via byte_count
+    // There should be a registry of completed reader, contain name: vec<byte reading order>
+    Base { elem: String },
+    Object { elem: String },
+    // pointer generically read the byte, it may not be convenient to access the info but the builder is correct
+    // Read the info later through the name.
+    ObjectPointer { elem: String },
+    StlVector { count: usize }, //assume it is vector<string>
     Unknown,
 }
 // Arc, not Box: a Base/Object field reuses the nested schema's already-built
 // plan wholesale (see register_tstreamerinfo), which means cloning entries out
 // of it. Arc::clone is a refcount bump regardless of the closure inside; Box
 // has no such Clone impl since it can't generically duplicate the boxed value.
+//
+
 pub type CompiledReader = Arc<dyn for<'a> Fn(&'a mut dyn ReadSeek) + Send + Sync>;
+
 pub fn build_field_reader(
     field_kind: &FieldKind,
     registry: &HashMap<String, Arc<ClassSchema>>,
@@ -121,190 +140,23 @@ pub fn build_field_reader(
                 }
             })
         }
-        FieldKind::VariableArray { elem, count_field } => {
-            todo!("VariableArray reader not implemented yet")
+        FieldKind::Base { elem } => {
+            let elem_schema = registry
+                .get(elem)
+                .expect("Base class not found in registry");
+            let base_plan = elem_schema.plan.clone();
+            Arc::new(move |mut reader| {
+                for step in base_plan.iter() {
+                    step(&mut *reader);
+                }
+            })
         }
-        FieldKind::Base(class_schema) => todo!("Base reader not implemented yet"),
-        FieldKind::Object(class_schema) => todo!("Object reader not implemented yet"),
-        FieldKind::ObjectPointer(class_schema) => todo!("ObjectPointer reader not implemented yet"),
-        FieldKind::StlVector(field_kind) => todo!("StlVector reader not implemented yet"),
+        FieldKind::Object { elem } => todo!("Object reader not implemented yet"),
+        FieldKind::ObjectPointer { elem } => Arc::new(|mut reader| {
+            let _value = reader.read_type::<u64>(Endian::Big).unwrap(); //think about how to get the type later...from schema?
+        }),
+        FieldKind::StlVector { count } => todo!("StlVector reader not implemented yet"),
+        FieldKind::PrimativePointer { elem } => todo!("StlVector reader not implemented yet"),
         FieldKind::Unknown => todo!("Unknown field reader not implemented yet"),
     }
-}
-
-// Manual, indentation-based Debug impls below: the derived output nests every
-// Base/Object/ObjectPointer schema inline, which turns even a small class like
-// TH1F into thousands of lines of struct/enum boilerplate. These instead print
-// one line per field in a flat, indented tree.
-
-fn write_indent(f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-    for _ in 0..indent {
-        write!(f, "  ")?;
-    }
-    Ok(())
-}
-
-impl ClassSchema {
-    fn write_tree(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        writeln!(
-            f,
-            "{} v{} (checksum={})",
-            self.name, self.version, self.checksum
-        )?;
-        for field in &self.fields {
-            field.write_tree(f, indent + 1)?;
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Debug for ClassSchema {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.write_tree(f, 0)
-    }
-}
-
-impl FieldSchema {
-    fn write_tree(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        write_indent(f, indent)?;
-        write!(f, "{}: ", self.name)?;
-        self.kind.write_tree(f, indent)
-    }
-}
-
-impl fmt::Debug for FieldSchema {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.write_tree(f, 0)
-    }
-}
-
-impl FieldKind {
-    // Multi-line form used for a field's own line; recurses into nested
-    // schemas as an indented sub-tree.
-    fn write_tree(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        match self {
-            FieldKind::FixedArray { elem, count } => {
-                write!(f, "[")?;
-                elem.write_inline(f)?;
-                writeln!(f, "; {count}]")
-            }
-            FieldKind::VariableArray { elem, count_field } => {
-                write!(f, "[")?;
-                elem.write_inline(f)?;
-                writeln!(f, "; {count_field}]")
-            }
-            FieldKind::Base(schema) => {
-                writeln!(
-                    f,
-                    "Base -> {} v{} (checksum={})",
-                    schema.name, schema.version, schema.checksum
-                )?;
-                for field in &schema.fields {
-                    field.write_tree(f, indent + 1)?;
-                }
-                Ok(())
-            }
-            FieldKind::Object(schema) => {
-                writeln!(
-                    f,
-                    "Object -> {} v{} (checksum={})",
-                    schema.name, schema.version, schema.checksum
-                )?;
-                for field in &schema.fields {
-                    field.write_tree(f, indent + 1)?;
-                }
-                Ok(())
-            }
-            FieldKind::ObjectPointer(schema) => {
-                writeln!(
-                    f,
-                    "ObjectPointer -> {} v{} (checksum={})",
-                    schema.name, schema.version, schema.checksum
-                )?;
-                for field in &schema.fields {
-                    field.write_tree(f, indent + 1)?;
-                }
-                Ok(())
-            }
-            FieldKind::StlVector(elem) => {
-                write!(f, "StlVector<")?;
-                elem.write_inline(f)?;
-                writeln!(f, ">")
-            }
-            _ => {
-                self.write_inline(f)?;
-                writeln!(f)
-            }
-        }
-    }
-
-    // Single-line, no-recursion form used for array/vector element types.
-    fn write_inline(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FieldKind::Bool => write!(f, "Bool"),
-            FieldKind::I8 => write!(f, "I8"),
-            FieldKind::I16 => write!(f, "I16"),
-            FieldKind::I32 => write!(f, "I32"),
-            FieldKind::I64 => write!(f, "I64"),
-            FieldKind::U8 => write!(f, "U8"),
-            FieldKind::U16 => write!(f, "U16"),
-            FieldKind::U32 => write!(f, "U32"),
-            FieldKind::U64 => write!(f, "U64"),
-            FieldKind::F32 => write!(f, "F32"),
-            FieldKind::F64 => write!(f, "F64"),
-            FieldKind::TString => write!(f, "TString"),
-            FieldKind::TObject => write!(f, "TObject"),
-            FieldKind::TNamed => write!(f, "TNamed"),
-            FieldKind::FixedArray { elem, count } => {
-                write!(f, "[")?;
-                elem.write_inline(f)?;
-                write!(f, "; {count}]")
-            }
-            FieldKind::VariableArray { elem, count_field } => {
-                write!(f, "[")?;
-                elem.write_inline(f)?;
-                write!(f, "; {count_field}]")
-            }
-            FieldKind::Base(schema) => write!(f, "Base<{}>", schema.name),
-            FieldKind::Object(schema) => write!(f, "Object<{}>", schema.name),
-            FieldKind::ObjectPointer(schema) => write!(f, "ObjectPointer<{}>", schema.name),
-            FieldKind::StlVector(elem) => {
-                write!(f, "StlVector<")?;
-                elem.write_inline(f)?;
-                write!(f, ">")
-            }
-            FieldKind::Unknown => write!(f, "Unknown"),
-        }
-    }
-}
-
-impl fmt::Debug for FieldKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.write_inline(f)
-    }
-}
-
-#[derive(Debug)]
-pub enum FieldValue {
-    Bool(bool),
-    I8(i8),
-    I16(i16),
-    I32(i32),
-    I64(i64),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    F32(f32),
-    F64(f64),
-    TString(TString),
-    TObject(TObject),
-    TNamed(TNamed),
-    Array(Vec<FieldValue>),
-    Object(ClassSchema),
-    ObjectPointer(Option<Box<ClassSchema>>),
-    StlVector(Vec<FieldValue>),
-    // A field we couldn't read with full fidelity (e.g. unresolved back-reference,
-    // unmodelled STL element kind). Carries a reason for debugging.
-    Unsupported(&'static str),
 }
